@@ -6,6 +6,7 @@ from .aqfxns import (
     probability_of_improvement,
     expected_improvement,
     upper_confidence_bound,
+    greedy,
 )
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
@@ -57,7 +58,7 @@ class AskTellFewShot:
 
     def tell(self, x: str, y: float) -> None:
         """Tell the optimizer about a new example."""
-        self.prompt.examples.append(dict(x=x, y=y))
+        self.prompt.examples.append(dict(x=x, y=f"{y: 0.2f}"))
         self._ys.append(y)
 
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
@@ -83,11 +84,13 @@ class AskTellFewShot:
     def ask(
         self,
         possible_x: List[str],
-        aq_fxn: str = "probability_of_improvement",
+        aq_fxn: str = "upper_confidence_bound",
         k: int = 1,
         _lambda: float = 0.5,
     ) -> Tuple[List[str], List[float], List[float]]:
         """Ask the optimizer for the next x to try.
+
+
 
         Args:
             possible_x: List of possible x values to choose from.
@@ -96,17 +99,26 @@ class AskTellFewShot:
             _lambda: Lambda value to use for UCB
         Return:
             The selected x values, their acquisition function values, and the predicted y modes.
+            Sorted by acquisition function value (descending)
         """
         if aq_fxn == "probability_of_improvement":
             aq_fxn = probability_of_improvement
         elif aq_fxn == "expected_improvement":
             aq_fxn = expected_improvement
         elif aq_fxn == "upper_confidence_bound":
-            aq_fxn = upper_confidence_bound
-        best = np.max(self.y_vals)
+            aq_fxn = partial(upper_confidence_bound, _lambda=_lambda)
+        elif aq_fxn == "greedy":
+            aq_fxn = greedy
+        else:
+            raise ValueError(f"Unknown acquisition function: {aq_fxn}")
+
+        if len(self._ys) == 0:
+            best = 0
+        else:
+            best = np.max(self._ys)
         results = self.predict(possible_x)
         aq_vals = [aq_fxn(*r, best) for r in results]
-        selected = np.argsort(aq_vals)[-k:]
+        selected = np.argsort(aq_vals)[::-1][:k]
         modes = [r[1][np.argmax(r[0])] for r in results]
         return (
             [possible_x[i] for i in selected],

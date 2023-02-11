@@ -53,4 +53,39 @@ def test_tell():
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
-    print(asktell.predict(2))
+    probs, values = asktell.predict(2)
+    m = values[np.argmax(probs)]
+    assert m == 4
+
+
+def test_ask_ei():
+    template = PromptTemplate(
+        input_variables=["x", "y"],
+        template="Q: What is the value of 2 * {x}?\n" "A: {y}\n",
+    )
+    asktell = bolift.AskTellFewShot(
+        template, suffix="Q: What is the value of 2 * {x}?\n A:"
+    )
+    asktell.tell(2, 4)
+    asktell.tell(1, 2)
+    asktell.tell(16, 32)
+    best, _, _ = asktell.ask(["2", "8"])
+    assert best[0] == "8"
+
+
+def test_ask_zero():
+    template = PromptTemplate(
+        input_variables=["x", "y"],
+        template="Q: What is the value of 2 * {x}?\n" "A: {y}\n",
+    )
+    asktell = bolift.AskTellFewShot(
+        template, suffix="Q: What is the value of 2 * {x}?\n A:"
+    )
+    _ = asktell.ask(
+        ["2", "8"],
+    )
+
+    _, scores, _ = asktell.ask(["2", "8"], k=2)
+    assert scores[0] > scores[1]
+
+    asktell.ask(["2", "8"], k=2, aq_fxn="greedy")

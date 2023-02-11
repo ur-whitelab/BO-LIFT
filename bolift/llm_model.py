@@ -1,18 +1,17 @@
 import numpy as np
-import os
-from pyrate_limiter import Duration, Limiter, RequestRate
 import re
 from langchain.llms import OpenAI
+from langchain.cache import InMemoryCache
+import langchain
 
-limiter = Limiter(RequestRate(23, Duration.MINUTE))
+langchain.llm_cache = InMemoryCache()
 
 
-def get_llm(model_name="text-ada-001", temperature=0.2):
+def get_llm(model_name="text-ada-001", temperature=0.0):
     return OpenAI(
         model_name=model_name,
         temperature=temperature,
-        model_kwargs=dict(logprobs=5),
-        stop=["\n"],
+        model_kwargs=dict(logprobs=5, stop=["\n"]),
     )
 
 

@@ -13,8 +13,13 @@ def probability_of_improvement(probs, values, best):
     return pi
 
 
-def upper_confidence_bound(probs, values, best):
+def upper_confidence_bound(probs, values, best, _lambda):
     """Upper confidence bound for the given discrete distribution"""
     mu = np.sum(values * probs)
     sigma = np.sqrt(np.sum((values - mu) ** 2 * probs))
-    return mu + sigma
+    return mu + _lambda * sigma
+
+
+def greedy(probs, values, best):
+    """Greedy selection (most likely point) for the given discrete distribution"""
+    return values[np.argmax(probs)]
