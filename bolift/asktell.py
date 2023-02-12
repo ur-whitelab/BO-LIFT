@@ -62,7 +62,7 @@ class AskTellFewShot:
         prefix: Optional[str] = None,
     ) -> FewShotPromptTemplate:
         if prefix is None:
-            prefix = "Select the best answer from the five choices below:"
+            prefix = "Select the best answer from the five choices below:\n"
         if prompt_template is None:
             prompt_template = PromptTemplate(
                 input_variables=["x", "Answer", "i"] + _answer_choices,
@@ -206,7 +206,7 @@ class AskTellFewShotTopk(AskTellFewShot):
     ) -> FewShotPromptTemplate:
         if prefix is None:
             prefix = (
-                "Answering the following questions with numerical values on one line:"
+                "Answering the following questions with numerical values on one line:\n"
             )
         if prompt_template is None:
             prompt_template = PromptTemplate(
