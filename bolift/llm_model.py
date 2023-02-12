@@ -14,6 +14,12 @@ class DiscreteDist:
     def sample(self):
         return np.random.choice(self.values, p=self.probs)
 
+    def mean(self):
+        return np.sum(self.values * self.probs)
+
+    def mode(self):
+        return self.values[np.argmax(self.probs)]
+
     def __repr__(self):
         return f"DiscreteDist({self.values}, {self.probs})"
 
@@ -22,7 +28,13 @@ langchain.llm_cache = InMemoryCache()
 
 
 def get_llm(
-    model_name="text-babbage-001", temperature=0.2, n=1, top_p=1, best_of=1, **kwargs
+    model_name="text-babbage-001",
+    temperature=0.05,
+    n=1,
+    top_p=1,
+    best_of=1,
+    max_tokens=128,
+    **kwargs,
 ):
     return OpenAI(
         model_name=model_name,
@@ -31,6 +43,7 @@ def get_llm(
         best_of=best_of,
         top_p=top_p,
         model_kwargs=kwargs,
+        max_tokens=max_tokens,
     )
 
 

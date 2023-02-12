@@ -51,7 +51,7 @@ def test_parse_response_topk():
 
 
 def test_tell_fewshot():
-    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"2 * {x}")
+    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"y = 2 * {x}")
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
@@ -61,7 +61,7 @@ def test_tell_fewshot():
 
 
 def test_tell_fewshot_topk():
-    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"2 * {x}")
+    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"y = 2 * {x}")
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
@@ -71,7 +71,7 @@ def test_tell_fewshot_topk():
 
 
 def test_ask_ei_fewshot():
-    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"2 * {x}")
+    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"y = 2 * {x}")
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
@@ -80,7 +80,7 @@ def test_ask_ei_fewshot():
 
 
 def test_ask_ei_fewshot_topk():
-    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"2 * {x}")
+    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"y = 2 * {x}")
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
@@ -89,7 +89,7 @@ def test_ask_ei_fewshot_topk():
 
 
 def test_ask_zero_fewshot():
-    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"2 * {x}")
+    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"y = 2 * {x}")
     _, scores, _ = asktell.ask([2, 8], k=2)
     assert scores[0] > scores[1]
     asktell.ask([2, 8], k=2, aq_fxn="greedy")
@@ -97,8 +97,10 @@ def test_ask_zero_fewshot():
 
 def test_ask_zero_fewshot_topk():
     asktell = bolift.AskTellFewShotTopk(
-        x_formatter=lambda x: f"2 * {x}", model="text-curie-001"
+        x_formatter=lambda x: f"y = f({x}) for the shifted Ackley function",
+        model="text-babbage-001",
     )
-    _, scores, _ = asktell.ask([2, 8], k=2)
+    _, scores, means = asktell.ask([2, 8], k=2)
+    print(scores, means)
     assert scores[0] > scores[1]
     asktell.ask([2, 8], k=2, aq_fxn="greedy")

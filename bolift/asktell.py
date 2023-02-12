@@ -19,10 +19,11 @@ class AskTellFewShot:
         self,
         prompt_template: PromptTemplate = None,
         suffix: Optional[str] = None,
-        model: str = "text-ada-001",
+        model: str = "text-curie-001",
         prefix: Optional[str] = None,
         x_formatter: Callable[[str], str] = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y: 0.2f}",
+        y_name: str = "y",
     ) -> None:
         """Initialize Ask-Tell optimizer.
 
@@ -36,6 +37,7 @@ class AskTellFewShot:
             prefix: Prefix to add before all examples (e.g., some context for the model).
             x_formatter: Function to format x for prompting.
             y_formatter: Function to format y for prompting.
+            y_name: Name of y variable in prompt template (e.g., density, value of function, etc.)
         """
         self._trained = 0
 
@@ -45,6 +47,7 @@ class AskTellFewShot:
         self._ys = []
         self._x_formatter = x_formatter
         self._y_formatter = y_formatter
+        self._y_name = y_name
 
     def _setup_llm(self, model: str):
         return get_llm(
@@ -62,29 +65,37 @@ class AskTellFewShot:
         prefix: Optional[str] = None,
     ) -> FewShotPromptTemplate:
         if prefix is None:
-            prefix = "Select the best answer from the five choices below:\n"
+            prefix = "For each question, select the best answer from the five choices below:\n"
         if prompt_template is None:
             prompt_template = PromptTemplate(
-                input_variables=["x", "Answer", "i"] + _answer_choices,
-                template="Question {i}: What is {x}?\n A. {A}\n B. {B}\n C. {C}\n D. {D}\n E. {E}\n\nAnswer: {Answer}\n\n",
+                input_variables=["x", "Answer", "i", "y_name"] + _answer_choices,
+                template="Question {i}: Given {x}, what is {y_name}?\n A. {A}\n B. {B}\n C. {C}\n D. {D}\n E. {E}\n\nAnswer: {Answer}\n\n",
             )
             if suffix is not None:
                 raise ValueError(
                     "Cannot provide suffix if using default prompt template."
                 )
-            suffix = "Question {i}: What is {x}?\n A."
+            suffix = "Question {i}: Given {x}, what is {y_name}?\n A."
         elif suffix is None:
             raise ValueError("Must provide suffix if using custom prompt template.")
         # test out prompt
         prompt_template.format(
-            x="test", A="12", B="32", C="20", D="16", E="24", Answer="C", i=1
+            x="test",
+            A="12",
+            B="32",
+            C="20",
+            D="16",
+            E="24",
+            Answer="C",
+            i=1,
+            y_name="fe",
         )
         return FewShotPromptTemplate(
             examples=[],
             example_prompt=prompt_template,
             suffix=suffix,
             prefix=prefix,
-            input_variables=["x", "i"],
+            input_variables=["x", "i", "y_name"],
         )
 
     def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
@@ -97,7 +108,10 @@ class AskTellFewShot:
         # choose answer
         answer = np.random.choice(_answer_choices)
         example_dict = dict(
-            x=self._x_formatter(x), i=len(self.prompt.examples) + 1, Answer=answer
+            x=self._x_formatter(x),
+            i=len(self.prompt.examples) + 1,
+            Answer=answer,
+            y_name=self._y_name,
         )
         for a in _answer_choices:
             if a == answer:
@@ -123,7 +137,9 @@ class AskTellFewShot:
             x = [x]
         queries = [
             self.prompt.format(
-                x=self._x_formatter(x_i), i=len(self.prompt.examples) + 1
+                x=self._x_formatter(x_i),
+                i=len(self.prompt.examples) + 1,
+                y_name=self._y_name,
             )
             for x_i in x
         ]
@@ -174,7 +190,7 @@ class AskTellFewShot:
         results = [r for r in results if len(r.probs) > 0]
         aq_vals = [aq_fxn(r.probs, r.values, best) for r in results]
         selected = np.argsort(aq_vals)[::-1][:k]
-        modes = [r.values[np.argmax(r.probs)] for r in results]
+        modes = [r.mode() for r in results]
         return (
             [possible_x[i] for i in selected],
             [aq_vals[i] for i in selected],
@@ -194,7 +210,13 @@ class AskTellFewShotTopk(AskTellFewShot):
             temperature=1,
             model_name=model,
             top_p=0.95,
-            stop=["\n"],
+            stop=["\n", "###", "#", "##"],
+            logit_bias={
+                "198": -100,  # new line,
+                "628": -100,  # double new line,
+                "50256": -100,  # endoftext
+            },
+            max_tokens=32,
             logprobs=1,
         )
 
@@ -206,28 +228,30 @@ class AskTellFewShotTopk(AskTellFewShot):
     ) -> FewShotPromptTemplate:
         if prefix is None:
             prefix = (
-                "Answering the following questions with numerical values on one line:\n"
+                "Answer correctly the following questions.\n"
+                "Your answers must be numerical and "
+                "you should end your answer with ###\n\n"
             )
         if prompt_template is None:
             prompt_template = PromptTemplate(
-                input_variables=["x", "y", "i"],
-                template="Q{i}: What is {x}?\nA{i}: {y}\n\n",
+                input_variables=["x", "y", "i", "y_name"],
+                template="Q{i}: Given {x}, what is {y_name}?\nA{i}: {y}###\n\n",
             )
             if suffix is not None:
                 raise ValueError(
                     "Cannot provide suffix if using default prompt template."
                 )
-            suffix = "Q{i}: What is {x}?\nA{i}: "
+            suffix = "Q{i}: Given {x}, what is {y_name}?\nA{i}: "
         elif suffix is None:
             raise ValueError("Must provide suffix if using custom prompt template.")
         # test out prompt
-        prompt_template.format(x="test", y="2.3", i=1)
+        prompt_template.format(x="test", y="2.3", i=1, y_name="tee")
         return FewShotPromptTemplate(
             examples=[],
             example_prompt=prompt_template,
             suffix=suffix,
             prefix=prefix,
-            input_variables=["x", "i"],
+            input_variables=["x", "i", "y_name"],
         )
 
     def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
@@ -239,6 +263,7 @@ class AskTellFewShotTopk(AskTellFewShot):
                 x=self._x_formatter(x),
                 i=len(self.prompt.examples) + 1,
                 y=self._y_formatter(y),
+                y_name=self._y_name,
             )
         )
         self._ys.append(y)
