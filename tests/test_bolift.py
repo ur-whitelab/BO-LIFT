@@ -4,88 +4,101 @@ import dataclasses
 import numpy as np
 from langchain.prompts.prompt import PromptTemplate
 
-
-def test_remove_overlap():
-    s1 = "This is a test"
-    s2 = "a test of the emergency broadcast system"
-    assert llm_model.remove_overlap(s1, s2) == " of the emergency broadcast system"
-    s1 = "This is a test"
-    s2 = " to make sure there is none"
-    assert llm_model.remove_overlap(s1, s2) == s2
-
-
-def test_truncate():
-    assert llm_model.truncate("1.0,") == "1.0"
-    assert llm_model.truncate("1.0") == "1.0"
-    assert llm_model.truncate("1.0\n") == "1.0"
-    assert llm_model.truncate("1.0\n\n") == "1.0"
-    assert llm_model.truncate("-1243.433+3433") == "-1243.433"
-
-
-def test_beam_search():
-    # response.choices[0]["logprobs"]["top_logprobs"]
-    tokens = [{"=1": -1.0}, {"\n": -2.0, "2\n": -1.0}]
-
-    mock_response = dict(logprobs=dict(top_logprobs=tokens))
-    lprobs_expected = np.array([-3, -2])
-    values_expected = np.array([1, 12])
-    max = lprobs_expected.max()
-    probs_expected = np.exp(lprobs_expected - max)
-    probs_expected /= probs_expected.sum()
-    probs, values = llm_model.token_beams(mock_response, "1+1=")
-    assert np.allclose(probs, probs_expected)
-    assert np.allclose(values, values_expected)
+np.random.seed(0)
 
 
 def test_completion():
-    llm = llm_model.get_llm()
+    llm = llm_model.get_llm(stop=["\n\n"])
     assert llm("The value of 1 + 1 is") == " 2"
 
 
-def test_tell():
-    template = PromptTemplate(
-        input_variables=["x", "y"],
-        template="Q: What is the value of 2 * {x}?\n" "A: {y}\n",
+def test_parse_response():
+    prompt = """
+Problem 1: What is 4 x 5?
+A. 12
+B. 32
+C. 20
+D. 16
+E. 24
+
+Answer: C
+
+Problem 2: What is 4 x 4?
+"""
+    llm = llm_model.get_llm(logprobs=5)
+    generation = llm.generate([prompt]).generations[0][0]
+    result = llm_model.parse_response(generation, prompt, llm)
+    # make sure answer is max
+    assert 16 in result.values.astype(int)
+
+
+def test_parse_response_topk():
+    prompt = "2 + 2 is"
+    llm = llm_model.get_llm(
+        n=3,
+        best_of=3,
+        temperature=1,
+        model_name="text-babbage-001",
+        top_p=0.99,
+        stop=["\n"],
+        logprobs=1,
     )
-    asktell = bolift.AskTellFewShot(
-        template, suffix="Q: What is the value of 2 * {x}?\n A:"
-    )
+    g = llm.generate([prompt]).generations
+    result = llm_model.parse_response_topk(g[0])
+    print(result)
+    # make sure answer is max
+    assert 4 in result.values.astype(int)
+
+
+def test_tell_fewshot():
+    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"2 * {x}")
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
-    probs, values = asktell.predict(2)
-    m = values[np.argmax(probs)]
+    dist = asktell.predict(2)
+    m = dist.values[np.argmax(dist.probs)]
     assert m == 4
 
 
-def test_ask_ei():
-    template = PromptTemplate(
-        input_variables=["x", "y"],
-        template="Q: What is the value of 2 * {x}?\n" "A: {y}\n",
-    )
-    asktell = bolift.AskTellFewShot(
-        template, suffix="Q: What is the value of 2 * {x}?\n A:"
-    )
+def test_tell_fewshot_topk():
+    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"2 * {x}")
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
-    best, _, _ = asktell.ask(["2", "8"])
-    assert best[0] == "8"
+    dist = asktell.predict(2)
+    m = dist.values[np.argmax(dist.probs)]
+    assert m == 4
 
 
-def test_ask_zero():
-    template = PromptTemplate(
-        input_variables=["x", "y"],
-        template="Q: What is the value of 2 * {x}?\n" "A: {y}\n",
-    )
-    asktell = bolift.AskTellFewShot(
-        template, suffix="Q: What is the value of 2 * {x}?\n A:"
-    )
-    _ = asktell.ask(
-        ["2", "8"],
-    )
+def test_ask_ei_fewshot():
+    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"2 * {x}")
+    asktell.tell(2, 4)
+    asktell.tell(1, 2)
+    asktell.tell(16, 32)
+    best, _, _ = asktell.ask([2, 8])
+    assert best[0] == 8
 
-    _, scores, _ = asktell.ask(["2", "8"], k=2)
+
+def test_ask_ei_fewshot_topk():
+    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"2 * {x}")
+    asktell.tell(2, 4)
+    asktell.tell(1, 2)
+    asktell.tell(16, 32)
+    best, _, _ = asktell.ask([2, 8])
+    assert best[0] == 8
+
+
+def test_ask_zero_fewshot():
+    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"2 * {x}")
+    _, scores, _ = asktell.ask([2, 8], k=2)
     assert scores[0] > scores[1]
+    asktell.ask([2, 8], k=2, aq_fxn="greedy")
 
-    asktell.ask(["2", "8"], k=2, aq_fxn="greedy")
+
+def test_ask_zero_fewshot_topk():
+    asktell = bolift.AskTellFewShotTopk(
+        x_formatter=lambda x: f"2 * {x}", model="text-curie-001"
+    )
+    _, scores, _ = asktell.ask([2, 8], k=2)
+    assert scores[0] > scores[1]
+    asktell.ask([2, 8], k=2, aq_fxn="greedy")
