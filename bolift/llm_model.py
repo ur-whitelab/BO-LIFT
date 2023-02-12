@@ -3,16 +3,77 @@ import re
 from langchain.llms import OpenAI
 from langchain.cache import InMemoryCache
 import langchain
+from dataclasses import dataclass
+
+
+@dataclass
+class DiscreteDist:
+    values: np.ndarray
+    probs: np.ndarray
+
+    def sample(self):
+        return np.random.choice(self.values, p=self.probs)
+
+    def __repr__(self):
+        return f"DiscreteDist({self.values}, {self.probs})"
+
 
 langchain.llm_cache = InMemoryCache()
 
 
-def get_llm(model_name="text-ada-001", temperature=0.0):
+def get_llm(
+    model_name="text-babbage-001", temperature=0.2, n=1, top_p=1, best_of=1, **kwargs
+):
     return OpenAI(
         model_name=model_name,
         temperature=temperature,
-        model_kwargs=dict(logprobs=5, stop=["\n"]),
+        n=n,
+        best_of=best_of,
+        top_p=top_p,
+        model_kwargs=kwargs,
     )
+
+
+def parse_response(generation, prompt, llm):
+    # first parse the options into numbers
+    text = generation.text
+    matches = re.findall(r"([A-Z])\. .*?([\+\-\d][\d\.e]*)", text)
+    values = dict()
+    k = None
+    for m in matches:
+        try:
+            k, v = m[0], float(m[1])
+            values[k] = v
+        except ValueError:
+            pass
+        k = None
+    # now get log prob of tokens after Answer:
+    tokens = generation.generation_info["logprobs"]["top_logprobs"]
+    offsets = generation.generation_info["logprobs"]["text_offset"]
+    if "Answer:" not in text:
+        # try to extend
+        c_generation = llm.generate([prompt + text + "\nAnswer:"]).generations[0][0]
+
+        logprobs = c_generation.generation_info["logprobs"]["top_logprobs"][0]
+    else:
+        # find token probs for answer
+        # feel like this is supper brittle, but not sure what else to try
+        at_answer = False
+        for i in range(len(offsets)):
+            start = offsets[i] - offsets[0]
+            end = offsets[i + 1] - offsets[0] if i < len(offsets) - 1 else -1
+            selected_token = text[start:end]
+            if "Answer" in selected_token:
+                at_answer = True
+            if at_answer and selected_token.strip() in values:
+                break
+        logprobs = tokens[i]
+    result = [
+        (values[k.strip()], v) for k, v in logprobs.items() if k.strip() in values
+    ]
+    probs = np.exp(np.array([v for k, v in result]))
+    probs = probs / np.sum(probs)
+    return DiscreteDist(np.array([k for k, v in result]), probs)
 
 
 def truncate(s):
@@ -31,55 +92,41 @@ def remove_overlap(s1, s2, check_l=10):
     return s2
 
 
-def token_beams(response, prompt, strings=None, lprobs=None, cut_n=25, i=0):
-    """Build full strings and probabilities from the token logprobs with beam search."""
-    if strings is None:
-        strings = [""]
-    if lprobs is None:
-        lprobs = [0]
-    # If we're at the end of the string, return the strings and probs
-    if i == len(response["logprobs"]["top_logprobs"]):
-        # parse the strings into values
-        if len(strings) == 0:
-            return np.array([1.0]), np.array([0.0])
-        values = dict()
-        lmax = max(lprobs)
-        for p, s in zip(lprobs, [truncate(s) for s in strings]):
-            try:
-                v = float(s)
-                if v not in values:
-                    values[v] = 0
-                values[v] += np.exp(p - lmax)
-            except ValueError:
-                pass
-        probs = np.array(list(values.values()))
-        probs /= probs.sum()
-        return probs, np.array(list(values.keys()))
-    new_strings = []
-    new_lprobs = []
-    for value_str, logp_str in response["logprobs"]["top_logprobs"][i].items():
+def parse_response_topk(generations):
+    values, logprobs = [], []
+    for gen in generations:
         try:
-            lp = float(logp_str)
-            if i == 0:
-                # If we're at the beginning of the string, we need to remove the prompt
-                value_str = remove_overlap(prompt, value_str)
-            new_strings.extend([s + value_str for s in strings])
-            new_lprobs.extend([p + lp for p in lprobs])
+            v = float(truncate(gen.text))
+            values.append(v)
         except ValueError:
-            print(f"ValueError: {value_str}, {logp_str}")
-    # Filter out the low-probability strings
-    cutoff = np.argsort(new_lprobs)[-cut_n:]
-    new_strings = [new_strings[c] for c in cutoff]
-    new_lprobs = [new_lprobs[c] for c in cutoff]
-    return token_beams(
-        response, prompt, strings=new_strings, lprobs=new_lprobs, cut_n=cut_n, i=i + 1
-    )
+            continue
+        # can do inner sum because there is only one token
+        lp = sum(
+            [
+                sum(x.to_dict().values())
+                for x in gen.generation_info["logprobs"]["top_logprobs"]
+            ]
+        )
+        logprobs.append(lp)
+
+    probs = np.exp(np.array(logprobs))
+    probs = probs / np.sum(probs)
+    return DiscreteDist(np.array(values), probs)
 
 
-def openai_predict(query_list, llm, *args, **kwargs):
+def openai_choice_predict(query_list, llm, *args, **kwargs):
     """Predict the output numbers for a given list of queries"""
     completion_response = llm.generate(query_list, *args, **kwargs)
     results = []
     for gen, q in zip(completion_response.generations, query_list):
-        results.append(token_beams(gen[0].generation_info, q))
+        results.append(parse_response(gen[0], q, llm))
+    return results
+
+
+def openai_topk_predict(query_list, llm, *args, **kwargs):
+    """Predict the output numbers for a given list of queries"""
+    completion_response = llm.generate(query_list, *args, **kwargs)
+    results = []
+    for gens in completion_response.generations:
+        results.append(parse_response_topk(gens))
     return results
