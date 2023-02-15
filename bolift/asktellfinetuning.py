@@ -7,6 +7,11 @@ from pyrate_limiter import Duration, Limiter, RequestRate
 import time
 import json
 
+from typing import *
+from .asktell import AskTellFewShot
+from langchain.prompts.few_shot import FewShotPromptTemplate
+from langchain.prompts.prompt import PromptTemplate
+
 from .llm_model import (
     get_llm, 
     openai_choice_predict, 
@@ -20,27 +25,44 @@ from .aqfxns import (
     greedy,
 )
 
-class AskTellFinetuning:
+class AskTellFinetuning(AskTellFewShot):
     def __init__(
         self,
-        data: str,
-        base_model: str,
-        n_epochs: int = 2, 
-        batch_size: int = 1
-    ):
-        self.data = data
-        self.llm = get_llm(model=base_model, logprobs=5)
+        prompt_template: PromptTemplate = None,
+        suffix: Optional[str] = None,
+        model: str = "text-curie-001",
+        prefix: Optional[str] = None,
+        x_formatter: Callable[[str], str] = lambda x: x,
+        y_formatter: Callable[[float], str] = lambda y: f"{y: 0.2f}",
+        y_name: str = "y",
+        id: str = None,
+        n_epochs: int = 2,
+        batch_size: int = 1,
+        finetune: bool = False
+    ) -> None:
+        super().__init__(prompt_template, suffix, model, prefix, x_formatter, y_formatter, y_name)
         self.n_epochs = n_epochs
         self.batch_size = batch_size
         self.response = None
+        self.finetune = finetune
+        self.base_model = model.split("-")[1]
+        if(id):
+            self.response = openai.FineTune.retrieve(id=id)
+            self.base_model = self.response["fine_tuned_model"]
+        self.llm = self._setup_llm(model=self.base_model)
 
 
-    def prepare_data(self, inFile, outFile):
+    def prepare_data_from_file(self, inFile, outFile):
         reg_df = pd.read_csv(inFile)
         # reg_df.to_json("regression_dataset_sial_ratio.jsonl", orient='records', lines=True)
         with open(outFile, "w") as f:
             for e in range(len(reg_df)):
                 f.write(f'{{"prompt": "{reg_df.iloc[e]["prompt"]}", "completion": "{reg_df.iloc[e]["completion"]}"}}\n')
+
+    def prepare_data(self, prompts, completions, outFile):
+        with open(outFile, "w") as f:
+            for p,c in zip(prompts, completions):
+                f.write(f'{{"prompt": "{p}", "completion": "{c}"}}\n')
 
             
     def upload_data(self, data):
@@ -63,14 +85,22 @@ class AskTellFinetuning:
         return response
 
 
-    def fineTune(self):
-        file_id = self.upload_data(self.data)
+    def fineTune(self, prompts, completions) -> None:
+        out_path = "out"
+        if not os.path.exists(f"{out_path}"):
+            os.makedirs(f"{out_path}")
+        self.prepare_data(prompts,
+                          completions,
+                          f"{out_path}/train_data_{len(self.prompt.examples)}.jsonl"
+                        )
+        file_id = self.upload_data(f"{out_path}/train_data_{len(self.prompt.examples)}.jsonl")
+
+        print(self.base_model)
         response = self.create_fineTune(file_id, self.base_model)
-        print(response["id"])
+
         s = openai.FineTune.retrieve(id=response["id"]).status
         t=0
         while (s != "succeeded"):
-            time.sleep(5)
             if t%3 == 0:
                 s+=".   "
             elif t%3 == 1:
@@ -83,89 +113,81 @@ class AskTellFinetuning:
             
             s = openai.FineTune.retrieve(id=response["id"]).status
             t+=1
+            time.sleep(2)
         print("\n")
-        self.response = response
-        return response
-    
+
+        self.response = openai.FineTune.retrieve(id=response["id"])
+        self.base_model = self.response["fine_tuned_model"]
+        self.llm = self._setup_llm(model=self.response["fine_tuned_model"])
+
+        with open(f"{out_path}/FT_model_{len(self.prompt.examples)}.dat", "w") as out:
+            out.write(json.dumps(response, indent=4))
+
 
     def get_model_id(self):
         return self.response["fine_tuned_model"]
 
 
-    def _predict(self, prompt, max_tokens=8, temperature=0):
-        # completion_response = openai.Completion.create(
-        #                         model=self.response["fine_tuned_model"] if self.response else "davinci",
-        #                         prompt=prompt,
-        #                         max_tokens=max_tokens,
-        #                         temperature=temperature,
-        #                         logprobs=5,
-        #                         # Should I add stop and logit_bias?
-        #                     )
-        return openai_choice_predict(prompt, self.llm)
+    # def _setup_prompt(
+    #     self,
+    #     prompt_template: Optional[PromptTemplate] = None,
+    #     suffix: Optional[str] = None,
+    #     prefix: Optional[str] = None,
+    # ) -> FewShotPromptTemplate:
+    #     if prefix is None:
+    #         prefix = (
+    #             "Answer correctly the following questions.\n"
+    #             "Your answers must be numerical and "
+    #             "you should end your answer with ###\n\n"
+    #         )
+    #     if prompt_template is None:
+    #         prompt_template = PromptTemplate(
+    #             input_variables=["x", "y", "i", "y_name"],
+    #             template="Q{i}: Given {x}, what is {y_name}?\nA{i}: {y}###\n\n",
+    #         )
+    #         if suffix is not None:
+    #             raise ValueError(
+    #                 "Cannot provide suffix if using default prompt template."
+    #             )
+    #         suffix = "Q{i}: Given {x}, what is {y_name}?\nA{i}: "
+    #     elif suffix is None:
+    #         raise ValueError("Must provide suffix if using custom prompt template.")
+    #     # test out prompt
+    #     prompt_template.format(x="test", y="2.3", i=1, y_name="tee")
+    #     return FewShotPromptTemplate(
+    #         examples=[],
+    #         example_prompt=prompt_template,
+    #         suffix=suffix,
+    #         prefix=prefix,
+    #         input_variables=["x", "i", "y_name"],
+    #     )
+
+
+    # def _predict(self, queries: List[str]) -> List[DiscreteDist]:
+    #     return openai_topk_predict(queries, self.llm)
 
 
     def predict(self, xs):
-        results = []
         xs = xs if isinstance(xs, list) else [xs]
-        for _, x in enumerate(xs):
-            results.append(self._predict(x))
+        queries = [
+            self.prompt.format(
+                x=self._x_formatter(x_i),
+                i=len(self.prompt.examples) + 1,
+                y_name=self._y_name,
+            )
+            for x_i in xs
+        ]
+        print(self.base_model)
+        if(self.finetune):
+            # Maybe run this only when we have a few new prompts? Each 5 new points??
+            if len(self.prompt.examples)%2 == 0 and len(self.prompt.examples)>0:
+                prompts = [p['x'] for p in self.prompt.examples]
+                completions = [p[p['Answer']] for p in self.prompt.examples]
+                self.fineTune(prompts, completions)
+
+            # 2 points -> ft-H3Bx697RyEZYZ7OAhtcPUnEI
+            # 4 points -> ft-h3p6ILhhtNCi1QFDsGB89amC
+            # self.response = openai.FineTune.retrieve(id="ft-H3Bx697RyEZYZ7OAhtcPUnEI")
+            # self.llm = self._setup_llm(model=self.response["fine_tuned_model"])
+        results = self._predict(queries)
         return results
-
-
-    def tell():
-        pass
-
-
-    def ask(self, possible_x, aq_fxn = "upper_confidence_bound", _lambda=0.5):
-        if aq_fxn == "probability_of_improvement":
-            aq_fxn = probability_of_improvement
-        elif aq_fxn == "expected_improvement":
-            aq_fxn = expected_improvement
-        elif aq_fxn == "upper_confidence_bound":
-            aq_fxn = partial(upper_confidence_bound, _lambda=_lambda)
-        elif aq_fxn == "greedy":
-            aq_fxn = greedy
-        else:
-            raise ValueError(f"Unknown acquisition function: {aq_fxn}")
-
-        results = self.predict(possible_x)
-        # Needs to output predictions and probabilities
-
-
-
-def prepare_data(inFile, outFile):
-    reg_df = pd.read_csv(inFile)
-    with open(outFile, "w") as f:
-        for e in range(len(reg_df)):
-            f.write(f'{{"prompt": "{reg_df.iloc[e]["prompt"]}", "completion": "{reg_df.iloc[e]["completion"]}"}}\n')
-
-def split_data(inFile, outFile, n):
-    with open(inFile, "r") as f:
-        with open(outFile, "w") as out:
-            for line in f.readlines()[0:n]:
-                out.write(line)
-
-if __name__ == "__main__":
-    openai.api_key = "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"
-    out_path = "out"
-    if not os.path.exists(f"{out_path}"):
-        os.makedirs(f"{out_path}")
-    
-    prepare_data(f"{out_path}/regression_dataset_sial_ratio.csv", f"{out_path}/tst_file.jsonl")
-    
-    split_data(f"{out_path}/tst_file.jsonl", f"{out_path}/tst_file_01.jsonl", 5)
-    ft = AskTellFinetuning(f"{out_path}/tst_file_01.jsonl", "ada")
-    # fineTuned_response = ft.fineTune()
-    fineTuned_response = openai.FineTune.retrieve(id="ft-cJWERNpqVpEixitITjFKSjIP")
-    with open(f"{out_path}/out01.dat", "w") as out:
-        out.write(json.dumps(fineTuned_response, indent=4))
-
-    # ask/tell procedure
-
-    split_data(f"{out_path}/tst_file.jsonl", f"{out_path}/tst_file_02.jsonl", 8)
-    ft = AskTellFinetuning(f"{out_path}/tst_file_02.jsonl", fineTuned_response["fine_tuned_model"])
-    fineTuned_response = ft.fineTune()
-    with open(f"{out_path}/out.dat02", "w") as out:
-        out.write(json.dumps(fineTuned_response, indent=4))
-
-    # print(openai.Model.list())
