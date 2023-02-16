@@ -45,19 +45,20 @@ def test_parse_response_topk():
     )
     g = llm.generate([prompt]).generations
     result = llm_model.parse_response_topk(g[0])
-    print(result)
     # make sure answer is max
     assert 4 in result.values.astype(int)
 
 
 def test_tell_fewshot():
-    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"y = 2 * {x}")
+    asktell = bolift.AskTellFewShot(
+        x_formatter=lambda x: f"y = 2 * {x}", y_formatter=lambda y: str(int(y))
+    )
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
-    dist = asktell.predict(2)
-    m = dist.values[np.argmax(dist.probs)]
-    assert m == 4
+    dist = asktell.predict(3)
+    m = dist.mode()
+    assert m == 9
 
 
 def test_tell_fewshot_topk():
@@ -101,6 +102,5 @@ def test_ask_zero_fewshot_topk():
         model="text-babbage-001",
     )
     _, scores, means = asktell.ask([2, 8], k=2)
-    print(scores, means)
     assert scores[0] > scores[1]
     asktell.ask([2, 8], k=2, aq_fxn="greedy")
