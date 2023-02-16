@@ -10,6 +10,7 @@ from .aqfxns import (
 )
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
+from langchain.vectorstores import FAISS
 
 _answer_choices = ["A", "B", "C", "D", "E"]
 
@@ -48,6 +49,7 @@ class AskTellFewShot:
         self._x_formatter = x_formatter
         self._y_formatter = y_formatter
         self._y_name = y_name
+        self._example_db = None
 
     def _setup_llm(self, model: str):
         return get_llm(
@@ -65,17 +67,17 @@ class AskTellFewShot:
         prefix: Optional[str] = None,
     ) -> FewShotPromptTemplate:
         if prefix is None:
-            prefix = "For each question, select the best answer from the five choices below:\n"
+            prefix = "For each question, select the best answer from the five choices below. Indicate your selection with 'Answer: ':\n"
         if prompt_template is None:
             prompt_template = PromptTemplate(
                 input_variables=["x", "Answer", "i", "y_name"] + _answer_choices,
-                template="Question {i}: Given {x}, what is {y_name}?\n A. {A}\n B. {B}\n C. {C}\n D. {D}\n E. {E}\n\nAnswer: {Answer}\n\n",
+                template="Question {i}: Given {x}, what is {y_name}?\nA. {A}\nB. {B}\nC. {C}\nD. {D}\nE. {E}\n\nAnswer: {Answer}\n\n",
             )
             if suffix is not None:
                 raise ValueError(
                     "Cannot provide suffix if using default prompt template."
                 )
-            suffix = "Question {i}: Given {x}, what is {y_name}?\n A."
+            suffix = "Question {i}: Given {x}, what is {y_name}?\nA."
         elif suffix is None:
             raise ValueError("Must provide suffix if using custom prompt template.")
         # test out prompt
@@ -101,10 +103,20 @@ class AskTellFewShot:
     def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
         """Tell the optimizer about a new example."""
         if alt_ys is not None:
-            if len(alt_ys) != 4:
+            if len(alt_ys) != len(_answer_choices) - 1:
                 raise ValueError("Must provide 4 alternative ys.")
+            alt_ys = [self._y_formatter(alt_y) for alt_y in alt_ys]
         else:
-            alt_ys = [y * n for n in np.random.uniform(0.8, 1.2, 4)]
+            alt_ys = []
+            alt_y = y
+            for i in range(100):
+                if len(alt_ys) == len(_answer_choices) - 1:
+                    break
+                alt_y = y * 10 ** np.random.normal(0, 0.2)
+                if self._y_formatter(alt_y) not in alt_ys and self._y_formatter(
+                    alt_y
+                ) != self._y_formatter(y):
+                    alt_ys.append(self._y_formatter(alt_y))
         # choose answer
         answer = np.random.choice(_answer_choices)
         example_dict = dict(
@@ -117,7 +129,7 @@ class AskTellFewShot:
             if a == answer:
                 example_dict[a] = self._y_formatter(y)
             else:
-                example_dict[a] = self._y_formatter(alt_ys.pop())
+                example_dict[a] = alt_ys.pop()
         self.prompt.examples.append(example_dict)
         self._ys.append(y)
 
