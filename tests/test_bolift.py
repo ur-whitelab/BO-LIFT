@@ -67,8 +67,20 @@ def test_tell_fewshot_topk():
     asktell.tell(1, 2)
     asktell.tell(16, 32)
     dist = asktell.predict(2)
-    m = dist.values[np.argmax(dist.probs)]
+    m = dist.mode()
     assert m == 4
+
+
+def test_tell_fewshot_selector():
+    asktell = bolift.AskTellFewShot(
+        x_formatter=lambda x: f"y = 2 * {x}",
+        selector_k=3,
+        y_formatter=lambda y: str(int(y)),
+    )
+    for i in range(5):
+        asktell.tell(i, 2 * i)
+    dist = asktell.predict(3)
+    assert 3 * 2 in dist.values
 
 
 def test_ask_ei_fewshot():
