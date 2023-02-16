@@ -11,6 +11,8 @@ from .aqfxns import (
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain.vectorstores import FAISS
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.prompts.example_selector import SemanticSimilarityExampleSelector
 
 _answer_choices = ["A", "B", "C", "D", "E"]
 
@@ -25,6 +27,7 @@ class AskTellFewShot:
         x_formatter: Callable[[str], str] = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y: 0.2f}",
         y_name: str = "y",
+        selector_k: Optional[int] = None,
     ) -> None:
         """Initialize Ask-Tell optimizer.
 
@@ -39,39 +42,42 @@ class AskTellFewShot:
             x_formatter: Function to format x for prompting.
             y_formatter: Function to format y for prompting.
             y_name: Name of y variable in prompt template (e.g., density, value of function, etc.)
+            selector_k: What k to use when switching to selection mode. If None, will use all examples
         """
-        self._trained = 0
-
-        self.prompt = self._setup_prompt(prompt_template, suffix, prefix)
-        self.train_loss = None
-        self.llm = self._setup_llm(model)
+        self._selector_k = selector_k
+        self._ready = False
         self._ys = []
         self._x_formatter = x_formatter
         self._y_formatter = y_formatter
         self._y_name = y_name
-        self._example_db = None
+        self._prompt_template = prompt_template
+        self._suffix = suffix
+        self._prefix = prefix
+        self._model = model
+        self._example_count = 0
 
     def _setup_llm(self, model: str):
         return get_llm(
             model_name=model,
             # put stop with suffix, so it doesn't start babbling
             stop=[self.prompt.suffix.split()[0]],
-            max_tokens=128,
+            max_tokens=256,
             logprobs=5,
         )
 
     def _setup_prompt(
         self,
+        example: Dict,
         prompt_template: Optional[PromptTemplate] = None,
         suffix: Optional[str] = None,
         prefix: Optional[str] = None,
     ) -> FewShotPromptTemplate:
         if prefix is None:
-            prefix = "For each question, select the best answer from the five choices below. Indicate your selection with 'Answer: ':\n"
+            prefix = "For each question, select the correct answer from the five choices below. Indicate your choice with 'Answer: ':\n"
         if prompt_template is None:
             prompt_template = PromptTemplate(
                 input_variables=["x", "Answer", "i", "y_name"] + _answer_choices,
-                template="Question {i}: Given {x}, what is {y_name}?\nA. {A}\nB. {B}\nC. {C}\nD. {D}\nE. {E}\n\nAnswer: {Answer}\n\n",
+                template="Question {i}: Given {x}. What is {y_name}?\nA. {A}\nB. {B}\nC. {C}\nD. {D}\nE. {E}\n\nAnswer: {Answer}\n\n",
             )
             if suffix is not None:
                 raise ValueError(
@@ -81,27 +87,35 @@ class AskTellFewShot:
         elif suffix is None:
             raise ValueError("Must provide suffix if using custom prompt template.")
         # test out prompt
-        prompt_template.format(
-            x="test",
-            A="12",
-            B="32",
-            C="20",
-            D="16",
-            E="24",
-            Answer="C",
-            i=1,
-            y_name="fe",
-        )
+        if example is not None:
+            prompt_template.format(**example)
+            examples = [example]
+        # TODO: make fake example text
+        else:
+            examples = []
+        example_selector = None
+        if self._selector_k is not None:
+            if len(examples) == 0:
+                raise ValueError("Cannot do zero-shot with selector")
+            example_selector = (
+                example_selector
+            ) = SemanticSimilarityExampleSelector.from_examples(
+                [example],
+                OpenAIEmbeddings(),
+                FAISS,
+                k=self._selector_k,
+            )
         return FewShotPromptTemplate(
-            examples=[],
+            examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
+            example_selector=example_selector,
             suffix=suffix,
             prefix=prefix,
             input_variables=["x", "i", "y_name"],
         )
 
-    def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
-        """Tell the optimizer about a new example."""
+    def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
+        # implementation of tell
         if alt_ys is not None:
             if len(alt_ys) != len(_answer_choices) - 1:
                 raise ValueError("Must provide 4 alternative ys.")
@@ -112,7 +126,10 @@ class AskTellFewShot:
             for i in range(100):
                 if len(alt_ys) == len(_answer_choices) - 1:
                     break
-                alt_y = y * 10 ** np.random.normal(0, 0.2)
+                if i < 50:
+                    alt_y = y * 10 ** np.random.normal(0, 0.2)
+                else:  # try something different
+                    alt_y = y + np.random.uniform(-10, 10)
                 if self._y_formatter(alt_y) not in alt_ys and self._y_formatter(
                     alt_y
                 ) != self._y_formatter(y):
@@ -121,7 +138,7 @@ class AskTellFewShot:
         answer = np.random.choice(_answer_choices)
         example_dict = dict(
             x=self._x_formatter(x),
-            i=len(self.prompt.examples) + 1,
+            i=str(self._example_count + 1),
             Answer=answer,
             y_name=self._y_name,
         )
@@ -130,8 +147,27 @@ class AskTellFewShot:
                 example_dict[a] = self._y_formatter(y)
             else:
                 example_dict[a] = alt_ys.pop()
-        self.prompt.examples.append(example_dict)
         self._ys.append(y)
+        return example_dict
+
+    def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
+        """Tell the optimizer about a new example."""
+        example_dict = self._tell(x, y, alt_ys)
+        # we want to have example
+        # to initialize prompts, so send it
+        if not self._ready:
+            self.prompt = self._setup_prompt(
+                example_dict, self._prompt_template, self._suffix, self._prefix
+            )
+            self.llm = self._setup_llm(self._model)
+            self._ready = True
+        else:
+            # in else, so we don't add twice
+            if self._selector_k is not None:
+                self.prompt.example_selector.add_example(example_dict)
+            else:
+                self.prompt.examples.append(example_dict)
+        self._example_count += 1
 
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
         return openai_choice_predict(queries, self.llm)
@@ -147,10 +183,18 @@ class AskTellFewShot:
         """
         if not isinstance(x, list):
             x = [x]
+        if not self._ready:
+            # special zero-shot
+            self.prompt = self._setup_prompt(
+                None, self._prompt_template, self._suffix, self._prefix
+            )
+            self.llm = self._setup_llm(self._model)
+            self._ready = True
+
         queries = [
             self.prompt.format(
                 x=self._x_formatter(x_i),
-                i=len(self.prompt.examples) + 1,
+                i=str(self._example_count + 1),
                 y_name=self._y_name,
             )
             for x_i in x
@@ -202,11 +246,11 @@ class AskTellFewShot:
         results = [r for r in results if len(r.probs) > 0]
         aq_vals = [aq_fxn(r.probs, r.values, best) for r in results]
         selected = np.argsort(aq_vals)[::-1][:k]
-        modes = [r.mode() for r in results]
+        means = [r.mean() for r in results]
         return (
             [possible_x[i] for i in selected],
             [aq_vals[i] for i in selected],
-            [modes[i] for i in selected],
+            [means[i] for i in selected],
         )
 
 
@@ -234,6 +278,7 @@ class AskTellFewShotTopk(AskTellFewShot):
 
     def _setup_prompt(
         self,
+        example: Dict,
         prompt_template: Optional[PromptTemplate] = None,
         suffix: Optional[str] = None,
         prefix: Optional[str] = None,
@@ -253,29 +298,33 @@ class AskTellFewShotTopk(AskTellFewShot):
                 raise ValueError(
                     "Cannot provide suffix if using default prompt template."
                 )
-            suffix = "Q{i}: Given {x}, what is {y_name}?\nA{i}: "
+            suffix = "Q{i}: Given {x}. What is {y_name}?\nA{i}: "
         elif suffix is None:
             raise ValueError("Must provide suffix if using custom prompt template.")
         # test out prompt
-        prompt_template.format(x="test", y="2.3", i=1, y_name="tee")
+        if example is not None:
+            prompt_template.format(**example)
+            examples = [example]
+        # TODO: make fake example text
+        else:
+            examples = []
         return FewShotPromptTemplate(
-            examples=[],
+            examples=examples,
             example_prompt=prompt_template,
             suffix=suffix,
             prefix=prefix,
             input_variables=["x", "i", "y_name"],
         )
 
-    def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
+    def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
         """Tell the optimizer about a new example."""
         if alt_ys is not None:
             raise ValueError("Alt ys not supported for topk.")
-        self.prompt.examples.append(
-            dict(
-                x=self._x_formatter(x),
-                i=len(self.prompt.examples) + 1,
-                y=self._y_formatter(y),
-                y_name=self._y_name,
-            )
+        example_dict = dict(
+            x=self._x_formatter(x),
+            i=self._example_count + 1,
+            y=self._y_formatter(y),
+            y_name=self._y_name,
         )
         self._ys.append(y)
+        return example_dict

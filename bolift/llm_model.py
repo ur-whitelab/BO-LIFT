@@ -20,6 +20,9 @@ class DiscreteDist:
     def mode(self):
         return self.values[np.argmax(self.probs)]
 
+    def std(self):
+        return np.sqrt(np.sum((self.values - self.mean()) ** 2 * self.probs))
+
     def __repr__(self):
         return f"DiscreteDist({self.values}, {self.probs})"
 
