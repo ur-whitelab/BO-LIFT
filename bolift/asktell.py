@@ -23,6 +23,7 @@ class AskTellFewShotMulti:
         prompt_template: PromptTemplate = None,
         suffix: Optional[str] = None,
         model: str = "text-curie-001",
+        temperature: Optional[float] = None,
         prefix: Optional[str] = None,
         x_formatter: Callable[[str], str] = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y: 0.2f}",
@@ -38,6 +39,7 @@ class AskTellFewShotMulti:
             prompt_template: Prompt template that should take x and y (for few shot templates)
             suffix: Matching suffix for first part of prompt template - for actual completion.
             model: OpenAI base model to use for training and inference.
+            temperature: Temperature to use for inference. If None, will use model default.
             prefix: Prefix to add before all examples (e.g., some context for the model).
             x_formatter: Function to format x for prompting.
             y_formatter: Function to format y for prompting.
@@ -56,13 +58,14 @@ class AskTellFewShotMulti:
         self._model = model
         self._example_count = 0
 
-    def _setup_llm(self, model: str):
+    def _setup_llm(self, model: str, temperature: Optional[float] = None):
         return get_llm(
             model_name=model,
             # put stop with suffix, so it doesn't start babbling
             stop=[self.prompt.suffix.split()[0]],
             max_tokens=256,
             logprobs=5,
+            temperature=0.05 if temperature is None else temperature,
         )
 
     def _setup_prompt(
@@ -258,12 +261,12 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
         return openai_topk_predict(queries, self.llm)
 
-    def _setup_llm(self, model: str):
+    def _setup_llm(self, model: str, temperature: Optional[float] = None):
         # nucleus sampling seems to get more diversity
         return get_llm(
             n=5,
             best_of=5,
-            temperature=1,
+            temperature=1 if temperature is None else temperature,
             model_name=model,
             top_p=0.95,
             stop=["\n", "###", "#", "##"],
@@ -293,6 +296,78 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
             prompt_template = PromptTemplate(
                 input_variables=["x", "y", "i", "y_name"],
                 template="Q{i}: Given {x}, what is {y_name}?\nA{i}: {y}###\n\n",
+            )
+            if suffix is not None:
+                raise ValueError(
+                    "Cannot provide suffix if using default prompt template."
+                )
+            suffix = "Q{i}: Given {x}. What is {y_name}?\nA{i}: "
+        elif suffix is None:
+            raise ValueError("Must provide suffix if using custom prompt template.")
+        # test out prompt
+        if example is not None:
+            prompt_template.format(**example)
+            examples = [example]
+        # TODO: make fake example text
+        else:
+            examples = []
+        return FewShotPromptTemplate(
+            examples=examples,
+            example_prompt=prompt_template,
+            suffix=suffix,
+            prefix=prefix,
+            input_variables=["x", "i", "y_name"],
+        )
+
+    def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
+        """Tell the optimizer about a new example."""
+        if alt_ys is not None:
+            raise ValueError("Alt ys not supported for topk.")
+        example_dict = dict(
+            x=self._x_formatter(x),
+            i=self._example_count + 1,
+            y=self._y_formatter(y),
+            y_name=self._y_name,
+        )
+        self._ys.append(y)
+        return example_dict
+
+class AskTellFewShotDirect(AskTellFewShotMulti):
+    def _predict(self, queries: List[str]) -> List[DiscreteDist]:
+        return openai_topk_predict(queries, self.llm)
+
+    def _setup_llm(self, model: str, temperature: Optional[float] = None):
+        return get_llm(
+            n=1,
+            temperature=0.05 if temperature is None else temperature,
+            model_name=model,
+            stop=["\n", "###", "#", "##"],
+            logit_bias={
+                "198": -100,  # new line,
+                "628": -100,  # double new line,
+                "50256": -100,  # endoftext
+            },
+            max_tokens=32,
+            logprobs=1,
+        )
+
+    def _setup_prompt(
+        self,
+        example: Dict,
+        prompt_template: Optional[PromptTemplate] = None,
+        suffix: Optional[str] = None,
+        prefix: Optional[str] = None,
+    ) -> FewShotPromptTemplate:
+        if prefix is None:
+            prefix = (
+                "Answer correctly the following questions.\n"
+                "Your should answer with a number and uncertainty (1 std dev).  "
+                "Here is an example: 3.4 +/- 0.2###\n\n"
+            )
+        if prompt_template is None:
+            prompt_template = PromptTemplate(
+                input_variables=["x", "y", "dy", "i", "y_name"],
+                template="Q{i}: Given {x}, what is {y_name}?\nA{i}: {y} +/- {dy}###\n\n",
             )
             if suffix is not None:
                 raise ValueError(
