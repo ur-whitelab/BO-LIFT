@@ -50,7 +50,7 @@ def test_parse_response_topk():
 
 
 def test_tell_fewshot():
-    asktell = bolift.AskTellFewShot(
+    asktell = bolift.AskTellFewShotMulti(
         x_formatter=lambda x: f"y = 2 * {x}", y_formatter=lambda y: str(int(y))
     )
     asktell.tell(2, 4)
@@ -72,7 +72,7 @@ def test_tell_fewshot_topk():
 
 
 def test_tell_fewshot_selector():
-    asktell = bolift.AskTellFewShot(
+    asktell = bolift.AskTellFewShotMulti(
         x_formatter=lambda x: f"y = 2 * {x}",
         selector_k=3,
         y_formatter=lambda y: str(int(y)),
@@ -84,7 +84,7 @@ def test_tell_fewshot_selector():
 
 
 def test_ask_ei_fewshot():
-    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"y = 2 * {x}")
+    asktell = bolift.AskTellFewShotMulti(x_formatter=lambda x: f"y = 2 * {x}")
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
@@ -102,7 +102,7 @@ def test_ask_ei_fewshot_topk():
 
 
 def test_ask_zero_fewshot():
-    asktell = bolift.AskTellFewShot(x_formatter=lambda x: f"y = 2 * {x}")
+    asktell = bolift.AskTellFewShotMulti(x_formatter=lambda x: f"y = 2 * {x}")
     _, scores, _ = asktell.ask([2, 8], k=2)
     assert scores[0] > scores[1]
     asktell.ask([2, 8], k=2, aq_fxn="greedy")

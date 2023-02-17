@@ -17,7 +17,7 @@ from langchain.prompts.example_selector import SemanticSimilarityExampleSelector
 _answer_choices = ["A", "B", "C", "D", "E"]
 
 
-class AskTellFewShot:
+class AskTellFewShotMulti:
     def __init__(
         self,
         prompt_template: PromptTemplate = None,
@@ -254,7 +254,7 @@ class AskTellFewShot:
         )
 
 
-class AskTellFewShotTopk(AskTellFewShot):
+class AskTellFewShotTopk(AskTellFewShotMulti):
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
         return openai_topk_predict(queries, self.llm)
 
