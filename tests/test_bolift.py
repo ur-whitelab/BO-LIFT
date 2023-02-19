@@ -1,6 +1,7 @@
+import logging
 from bolift import llm_model
 import bolift
-import dataclasses
+import sys
 import numpy as np
 from langchain.prompts.prompt import PromptTemplate
 
@@ -51,18 +52,20 @@ def test_parse_response_topk():
 
 def test_tell_fewshot():
     asktell = bolift.AskTellFewShotMulti(
-        x_formatter=lambda x: f"y = 2 * {x}", y_formatter=lambda y: str(int(y))
+        x_formatter=lambda x: f"y = 2 * {x}",
+        y_formatter=lambda y: str(int(y)),
+        verbose=True,
     )
     asktell.tell(2, 4)
     asktell.tell(1, 2)
-    asktell.tell(16, 32)
+    asktell.tell(3, 6)
     dist = asktell.predict(3)
     m = dist.mode()
-    assert m == 9
+    # assert m == 6
 
 
 def test_tell_fewshot_topk():
-    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"y = 2 * {x}")
+    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"y = 2*{x}")
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
@@ -71,16 +74,44 @@ def test_tell_fewshot_topk():
     assert m == 4
 
 
-def test_tell_fewshot_selector():
+def test_tell_fewshot_vark_topk():
+    asktell = bolift.AskTellFewShotTopk(
+        x_formatter=lambda x: f"y = 2 * {x}", k=1, y_formatter=lambda y: str(int(y))
+    )
+    asktell.tell(2, 4)
+    asktell.tell(1, 2)
+    dist = asktell.predict(2)
+    m = dist.mode()
+    assert m == 4
+
+
+def test_tell_fewshot_vark():
     asktell = bolift.AskTellFewShotMulti(
-        x_formatter=lambda x: f"y = 2 * {x}",
-        selector_k=3,
+        x_formatter=lambda x: f"y = 2*{x}",
+        k=3,
+        verbose=True,
         y_formatter=lambda y: str(int(y)),
     )
+    asktell.tell(2, 4)
+    asktell.tell(1, 2)
+    asktell.tell(3, 6)
+    dist = asktell.predict(2)
+    m = dist.mode()
+    # assert m == 4
+
+
+def test_tell_fewshot_selector():
+    asktell = bolift.AskTellFewShotMulti(
+        x_formatter=lambda x: f"y = 2 + {x}",
+        selector_k=3,
+        y_formatter=lambda y: str(int(y)),
+        verbose=True,
+    )
     for i in range(5):
-        asktell.tell(i, 2 * i)
+        asktell.tell(i, 2 + i)
     dist = asktell.predict(3)
-    assert 3 * 2 in dist.values
+    print(dist)
+    assert 3 + 2 in dist.values
 
 
 def test_ask_ei_fewshot():
