@@ -110,7 +110,19 @@ def test_tell_fewshot_selector():
     for i in range(5):
         asktell.tell(i, 2 + i)
     dist = asktell.predict(3)
-    print(dist)
+    assert 3 + 2 in dist.values
+
+
+def test_tell_fewshot_topk_selector():
+    asktell = bolift.AskTellFewShotTopk(
+        x_formatter=lambda x: f"y = 2 + {x}",
+        selector_k=3,
+        y_formatter=lambda y: str(int(y)),
+        verbose=True,
+    )
+    for i in range(5):
+        asktell.tell(i, 2 + i)
+    dist = asktell.predict(3)
     assert 3 + 2 in dist.values
 
 

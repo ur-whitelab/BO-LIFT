@@ -12,7 +12,7 @@ from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.prompts.example_selector import SemanticSimilarityExampleSelector
+from langchain.prompts.example_selector import MaxMarginalRelevanceExampleSelector
 
 _answer_choices = ["A", "B", "C", "D", "E"]
 
@@ -112,7 +112,7 @@ class AskTellFewShotMulti:
                 raise ValueError("Cannot do zero-shot with selector")
             example_selector = (
                 example_selector
-            ) = SemanticSimilarityExampleSelector.from_examples(
+            ) = MaxMarginalRelevanceExampleSelector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
                 FAISS,
@@ -318,9 +318,22 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
         # TODO: make fake example text
         else:
             examples = []
+        example_selector = None
+        if self._selector_k is not None:
+            if len(examples) == 0:
+                raise ValueError("Cannot do zero-shot with selector")
+            example_selector = (
+                example_selector
+            ) = MaxMarginalRelevanceExampleSelector.from_examples(
+                [example],
+                OpenAIEmbeddings(),
+                FAISS,
+                k=self._selector_k,
+            )
         return FewShotPromptTemplate(
-            examples=examples,
+            examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
+            example_selector=example_selector,
             suffix=suffix,
             prefix=prefix,
             input_variables=["x", "y_name"],
