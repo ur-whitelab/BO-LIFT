@@ -8,6 +8,7 @@ from .aqfxns import (
     upper_confidence_bound,
     greedy,
 )
+from .pool import Pool
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain.vectorstores import FAISS
@@ -53,8 +54,8 @@ class AskTellFewShotMulti:
         self._selector_k = selector_k
         self._ready = False
         self._ys = []
-        self._x_formatter = x_formatter
-        self._y_formatter = y_formatter
+        self.format_x = x_formatter
+        self.format_y = y_formatter
         self._y_name = y_name
         self._prompt_template = prompt_template
         self._suffix = suffix
@@ -70,10 +71,41 @@ class AskTellFewShotMulti:
         return get_llm(
             model_name=model,
             # put stop with suffix, so it doesn't start babbling
-            stop=[self.prompt.suffix.split()[0]],
+            stop=[self.prompt.suffix.split()[0], self.inv_prompt.suffix.split()[0]],
             max_tokens=256,
             logprobs=self._k,
             temperature=0.05 if temperature is None else temperature,
+        )
+
+    def _setup_inverse_prompt(self, example: Dict):
+        prompt_template = PromptTemplate(
+            input_variables=["x", "y", "y_name"],
+            template="If {y_name} is {y}, then {x}\n\n",
+        )
+        if example is not None:
+            prompt_template.format(**example)
+            examples = [example]
+        # TODO: make fake example text
+        else:
+            examples = []
+        example_selector = None
+        if self._selector_k is not None:
+            if len(examples) == 0:
+                raise ValueError("Cannot do zero-shot with selector")
+            example_selector = (
+                example_selector
+            ) = MaxMarginalRelevanceExampleSelector.from_examples(
+                [example],
+                OpenAIEmbeddings(),
+                FAISS,
+                k=self._selector_k,
+            )
+        return FewShotPromptTemplate(
+            examples=examples if example_selector is None else None,
+            example_prompt=prompt_template,
+            example_selector=example_selector,
+            suffix="If {y_name} is {y}, then",
+            input_variables=["y", "y_name"],
         )
 
     def _setup_prompt(
@@ -132,7 +164,7 @@ class AskTellFewShotMulti:
         if alt_ys is not None:
             if len(alt_ys) != len(self._answer_choices) - 1:
                 raise ValueError("Must provide 4 alternative ys.")
-            alt_ys = [self._y_formatter(alt_y) for alt_y in alt_ys]
+            alt_ys = [self.format_y(alt_y) for alt_y in alt_ys]
         else:
             alt_ys = []
             alt_y = y
@@ -143,46 +175,59 @@ class AskTellFewShotMulti:
                     alt_y = y * 10 ** np.random.normal(0, 0.2)
                 else:  # try something different
                     alt_y = y + np.random.uniform(-10, 10)
-                if self._y_formatter(alt_y) not in alt_ys and self._y_formatter(
+                if self.format_y(alt_y) not in alt_ys and self.format_y(
                     alt_y
-                ) != self._y_formatter(y):
-                    alt_ys.append(self._y_formatter(alt_y))
+                ) != self.format_y(y):
+                    alt_ys.append(self.format_y(alt_y))
         # choose answer
         answer = np.random.choice(self._answer_choices)
         example_dict = dict(
-            x=self._x_formatter(x),
+            x=self.format_x(x),
             Answer=answer,
             y_name=self._y_name,
         )
         for a in self._answer_choices:
             if a == answer:
-                example_dict[a] = self._y_formatter(y)
+                example_dict[a] = self.format_y(y)
             else:
                 example_dict[a] = alt_ys.pop()
         self._ys.append(y)
-        return example_dict
+        inv_example = dict(x=self.format_x(x), y_name=self._y_name, y=self.format_y(y))
+        return example_dict, inv_example
 
     def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
         """Tell the optimizer about a new example."""
-        example_dict = self._tell(x, y, alt_ys)
+        example_dict, inv_example = self._tell(x, y, alt_ys)
         # we want to have example
         # to initialize prompts, so send it
         if not self._ready:
             self.prompt = self._setup_prompt(
                 example_dict, self._prompt_template, self._suffix, self._prefix
             )
+            self.inv_prompt = self._setup_inverse_prompt(inv_example)
             self.llm = self._setup_llm(self._model, self._temperature)
             self._ready = True
         else:
             # in else, so we don't add twice
             if self._selector_k is not None:
                 self.prompt.example_selector.add_example(example_dict)
+                self.inv_prompt.example_selector.add_example(inv_example)
             else:
                 self.prompt.examples.append(example_dict)
+                self.inv_prompt.examples.append(inv_example)
         self._example_count += 1
 
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
         return openai_choice_predict(queries, self.llm, self._verbose)
+
+    def inv_predict(self, y: float) -> str:
+        """A rough inverse model"""
+        if not self._ready:
+            raise ValueError(
+                "Must tell at least one example before inverse predicting."
+            )
+        query = self.inv_prompt.format(y=self.format_y(y), y_name=self._y_name)
+        return self.llm(query)
 
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
@@ -200,12 +245,17 @@ class AskTellFewShotMulti:
             self.prompt = self._setup_prompt(
                 None, self._prompt_template, self._suffix, self._prefix
             )
+            self.inv_prompt = self._setup_inverse_prompt(None)
             self.llm = self._setup_llm(self._model)
             self._ready = True
 
+        if self._selector_k is not None:
+            # have to update this until my PR is merged
+            self.prompt.example_selector.k = min(self._example_count, self._selector_k)
+
         queries = [
             self.prompt.format(
-                x=self._x_formatter(x_i),
+                x=self.format_x(x_i),
                 y_name=self._y_name,
             )
             for x_i in x
@@ -219,9 +269,10 @@ class AskTellFewShotMulti:
 
     def ask(
         self,
-        possible_x: List[str],
+        possible_x: Union[Pool, List[str]],
         aq_fxn: str = "upper_confidence_bound",
         k: int = 1,
+        inv_filter: int = 0,
         _lambda: float = 0.5,
     ) -> Tuple[List[str], List[float], List[float]]:
         """Ask the optimizer for the next x to try.
@@ -232,11 +283,15 @@ class AskTellFewShotMulti:
             possible_x: List of possible x values to choose from.
             aq_fxn: Acquisition function to use.
             k: Number of x values to return.
+            inv_filter: Reduce pool size to this number with inverse model. If 0, not used
             _lambda: Lambda value to use for UCB
         Return:
             The selected x values, their acquisition function values, and the predicted y modes.
             Sorted by acquisition function value (descending)
         """
+        if type(possible_x) == type([]):
+            possible_x = Pool(possible_x, self.format_x)
+
         if aq_fxn == "probability_of_improvement":
             aq_fxn = probability_of_improvement
         elif aq_fxn == "expected_improvement":
@@ -245,6 +300,12 @@ class AskTellFewShotMulti:
             aq_fxn = partial(upper_confidence_bound, _lambda=_lambda)
         elif aq_fxn == "greedy":
             aq_fxn = greedy
+        elif aq_fxn == "random":
+            return (
+                possible_x.sample(k),
+                [0] * k,
+                [0] * k,
+            )
         else:
             raise ValueError(f"Unknown acquisition function: {aq_fxn}")
 
@@ -252,6 +313,23 @@ class AskTellFewShotMulti:
             best = 0
         else:
             best = np.max(self._ys)
+        if inv_filter != 0:
+            # not sure if this is too important,
+            # but to get some diversity we
+            # take last added y AND best
+            approx_x = self.inv_predict(best)
+            possible_x_l = possible_x.approx_sample(approx_x, inv_filter // 2)
+            approx_x = self.inv_predict(self._ys[-1])
+            possible_x_l += possible_x.approx_sample(
+                approx_x, inv_filter - inv_filter // 2
+            )
+        else:
+            possible_x_l = list(possible_x)
+        return self._ask(possible_x_l, best, aq_fxn, k)
+
+    def _ask(
+        self, possible_x: List[str], best: float, aq_fxn: Callable, k: int
+    ) -> Tuple[List[str], List[float], List[float]]:
         results = self.predict(possible_x)
         # drop empties
         results = [r for r in results if len(r.probs) > 0]
@@ -344,9 +422,14 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
         if alt_ys is not None:
             raise ValueError("Alt ys not supported for topk.")
         example_dict = dict(
-            x=self._x_formatter(x),
-            y=self._y_formatter(y),
+            x=self.format_x(x),
+            y=self.format_y(y),
             y_name=self._y_name,
         )
         self._ys.append(y)
-        return example_dict
+        inv_dict = dict(
+            x=self.format_x(x),
+            y=self.format_y(y),
+            y_name=self._y_name,
+        )
+        return example_dict, inv_dict
