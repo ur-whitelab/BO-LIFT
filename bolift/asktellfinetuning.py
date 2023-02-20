@@ -17,18 +17,21 @@ class AskTellFinetuning(AskTellFewShotTopk):
         prompt_template: PromptTemplate = None,
         suffix: Optional[str] = None,
         model: str = "text-curie-001",
+        temperature: Optional[float] = None,
         prefix: Optional[str] = None,
         x_formatter: Callable[[str], str] = lambda x: x,
-        y_formatter: Callable[[float], str] = lambda y: f"{y: 0.2f}",
+        y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
         y_name: str = "y",
         selector_k: Optional[int] = None,
+        k: int = 5,
+        verbose: bool = False,
         id: str = None,
         n_epochs: int = 4,
         batch_size: int = 1,
         finetune: bool = False,
         examples: List[Tuple[str, float]] = [],
     ) -> None:
-        super().__init__(prompt_template, suffix, model, prefix, x_formatter, y_formatter, y_name, selector_k)
+        super().__init__(prompt_template, suffix, model, temperature, prefix, x_formatter, y_formatter, y_name, selector_k, k, verbose)
         self.n_epochs = n_epochs
         self.batch_size = batch_size
         self.response = None
@@ -50,7 +53,7 @@ class AskTellFinetuning(AskTellFewShotTopk):
     def prepare_data(self, prompts, completions, outFile):
         with open(outFile, "w") as f:
             for p,c in zip(prompts, completions):
-                p = p.replace('°', '')	
+                p = p.replace('°', '')
                 f.write(f'{{"prompt": "{p}", "completion": "{c}"}}\n')
 
             
@@ -64,7 +67,7 @@ class AskTellFinetuning(AskTellFewShotTopk):
         return file_id
 
 
-    def create_fineTune(self, file_id, base_model):
+    def create_fine_tune(self, file_id, base_model):
         response = openai.FineTune.create(
                               training_file=file_id, 
                               model=base_model,
@@ -74,8 +77,7 @@ class AskTellFinetuning(AskTellFewShotTopk):
         return response
 
 
-    def fineTune(self, prompts, completions) -> None:
-        out_path = "out"
+    def fine_tune(self, prompts, completions, out_path="./out") -> None:
         if not os.path.exists(f"{out_path}"):
             os.makedirs(f"{out_path}")
         self.prepare_data(prompts,
@@ -84,7 +86,7 @@ class AskTellFinetuning(AskTellFewShotTopk):
                         )
         file_id = self.upload_data(f"{out_path}/train_data_{len(self.prompt.examples)}.jsonl")
 
-        response = self.create_fineTune(file_id, self.base_model)
+        response = self.create_fine_tune(file_id, self.base_model)
 
         s = openai.FineTune.retrieve(id=response["id"]).status
         t=0
@@ -112,32 +114,9 @@ class AskTellFinetuning(AskTellFewShotTopk):
             out.write(json.dumps(self.response, indent=4))
 
 
-    def get_model_id(self):
+    def get_model_name(self):
         return self.response["fine_tuned_model"] if self.response else self.base_model
 
-
-    def predict(self, xs):
-        xs = xs if isinstance(xs, list) else [xs]
-        if not self._ready:
-            # special zero-shot
-            self.prompt = self._setup_prompt(
-                None, self._prompt_template, self._suffix, self._prefix
-            )
-            self.llm = self._setup_llm(self.base_model)
-            self._ready = True
-
-        queries = [
-            self.prompt.format(
-                x=self._x_formatter(x_i),
-                i=len(self.prompt.examples) + 1,
-                y_name=self._y_name,
-            )
-            for x_i in xs
-        ]
-
-        results = self._predict(queries)
-        return results
-    
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
         """Tell the optimizer about a new example."""
         if alt_ys is not None:
@@ -145,20 +124,18 @@ class AskTellFinetuning(AskTellFewShotTopk):
         
         if(self.finetune):
             if len(self.prompt.examples)%5 == 0 and len(self.prompt.examples)>0:
-                prompts = [f"Q{p['i']}: Given {p['x']}. What is {self._y_name}?\\nA{p['i']}: "
-                            for p in self.prompt.examples]
-                completions = [p['y'] for p in self.prompt.examples]
-                self.fineTune(prompts, completions)
                 self.examples.extend(self.prompt.examples)
+                prompts = [f"Q: Given {p['x']}. What is {self._y_name}?\\nA: "
+                            for p in self.examples]
+                completions = [p['y'] for p in self.examples]
+                self.fine_tune(prompts, completions)
                 self.prompt.examples = None
 
         example_dict = dict(
             x=self._x_formatter(x),
-            i=self._example_count + 1,
             y=self._y_formatter(y),
             y_name=self._y_name,
         )
         self._ys.append(y)
         return example_dict
-    
     
