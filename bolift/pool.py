@@ -41,9 +41,7 @@ class Pool:
         """Given an approximation of x, return k similar"""
         # want to select extra, then remove previously chosen
         _k = k + len(self._selected)
-        docs = self._db.max_marginal_relevance_search(
-            self.format(x), k=_k, fetch_k=5 * _k
-        )
+        docs = self._db.max_marginal_relevance_search(x, k=_k, fetch_k=5 * _k)
         docs = [d.metadata["data"] for d in docs]
         # remove previously chosen
         docs = [d for d in docs if d not in self._selected]
