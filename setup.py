@@ -16,7 +16,7 @@ setup(
     url="https://github.com/whitead/bolift",
     license="MIT",
     packages=["bolift"],
-    install_requires=["numpy", "langchain", "openai"],
+    install_requires=["numpy", "langchain", "openai", "faiss-cpu"],
     test_suite="tests",
     long_description=long_description,
     long_description_content_type="text/markdown",

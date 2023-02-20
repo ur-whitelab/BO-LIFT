@@ -12,22 +12,25 @@ from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.prompts.example_selector import SemanticSimilarityExampleSelector
+from langchain.prompts.example_selector import MaxMarginalRelevanceExampleSelector
 
 _answer_choices = ["A", "B", "C", "D", "E"]
 
 
-class AskTellFewShot:
+class AskTellFewShotMulti:
     def __init__(
         self,
         prompt_template: PromptTemplate = None,
         suffix: Optional[str] = None,
         model: str = "text-curie-001",
+        temperature: Optional[float] = None,
         prefix: Optional[str] = None,
         x_formatter: Callable[[str], str] = lambda x: x,
-        y_formatter: Callable[[float], str] = lambda y: f"{y: 0.2f}",
+        y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
         y_name: str = "y",
         selector_k: Optional[int] = None,
+        k: int = 5,
+        verbose: bool = False,
     ) -> None:
         """Initialize Ask-Tell optimizer.
 
@@ -38,11 +41,14 @@ class AskTellFewShot:
             prompt_template: Prompt template that should take x and y (for few shot templates)
             suffix: Matching suffix for first part of prompt template - for actual completion.
             model: OpenAI base model to use for training and inference.
+            temperature: Temperature to use for inference. If None, will use model default.
             prefix: Prefix to add before all examples (e.g., some context for the model).
             x_formatter: Function to format x for prompting.
             y_formatter: Function to format y for prompting.
             y_name: Name of y variable in prompt template (e.g., density, value of function, etc.)
             selector_k: What k to use when switching to selection mode. If None, will use all examples
+            k: Number of examples to use for each prediction.
+            verbose: Whether to print out debug information.
         """
         self._selector_k = selector_k
         self._ready = False
@@ -55,14 +61,19 @@ class AskTellFewShot:
         self._prefix = prefix
         self._model = model
         self._example_count = 0
+        self._temperature = temperature
+        self._k = k
+        self._answer_choices = _answer_choices[:k]
+        self._verbose = verbose
 
-    def _setup_llm(self, model: str):
+    def _setup_llm(self, model: str, temperature: Optional[float] = None):
         return get_llm(
             model_name=model,
             # put stop with suffix, so it doesn't start babbling
             stop=[self.prompt.suffix.split()[0]],
             max_tokens=256,
-            logprobs=5,
+            logprobs=self._k,
+            temperature=0.05 if temperature is None else temperature,
         )
 
     def _setup_prompt(
@@ -73,17 +84,19 @@ class AskTellFewShot:
         prefix: Optional[str] = None,
     ) -> FewShotPromptTemplate:
         if prefix is None:
-            prefix = "For each question, select the correct answer from the five choices below. Indicate your choice with 'Answer: ':\n"
+            prefix = f"For each multiple choice question, select correct choice from {','.join(self._answer_choices)}\n"
         if prompt_template is None:
             prompt_template = PromptTemplate(
-                input_variables=["x", "Answer", "i", "y_name"] + _answer_choices,
-                template="Question {i}: Given {x}. What is {y_name}?\nA. {A}\nB. {B}\nC. {C}\nD. {D}\nE. {E}\n\nAnswer: {Answer}\n\n",
+                input_variables=["x", "Answer", "y_name"] + self._answer_choices,
+                template="Q: Given {x}. What is {y_name}?\n"
+                + "\n".join([f"{a}. {{{a}}}" for a in self._answer_choices])
+                + "\nAnswer: {Answer}\n\n",
             )
             if suffix is not None:
                 raise ValueError(
                     "Cannot provide suffix if using default prompt template."
                 )
-            suffix = "Question {i}: Given {x}, what is {y_name}?\nA."
+            suffix = "Q: Given {x}, what is {y_name}?\nA."
         elif suffix is None:
             raise ValueError("Must provide suffix if using custom prompt template.")
         # test out prompt
@@ -99,7 +112,7 @@ class AskTellFewShot:
                 raise ValueError("Cannot do zero-shot with selector")
             example_selector = (
                 example_selector
-            ) = SemanticSimilarityExampleSelector.from_examples(
+            ) = MaxMarginalRelevanceExampleSelector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
                 FAISS,
@@ -111,20 +124,20 @@ class AskTellFewShot:
             example_selector=example_selector,
             suffix=suffix,
             prefix=prefix,
-            input_variables=["x", "i", "y_name"],
+            input_variables=["x", "y_name"],
         )
 
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
         # implementation of tell
         if alt_ys is not None:
-            if len(alt_ys) != len(_answer_choices) - 1:
+            if len(alt_ys) != len(self._answer_choices) - 1:
                 raise ValueError("Must provide 4 alternative ys.")
             alt_ys = [self._y_formatter(alt_y) for alt_y in alt_ys]
         else:
             alt_ys = []
             alt_y = y
             for i in range(100):
-                if len(alt_ys) == len(_answer_choices) - 1:
+                if len(alt_ys) == len(self._answer_choices) - 1:
                     break
                 if i < 50:
                     alt_y = y * 10 ** np.random.normal(0, 0.2)
@@ -135,14 +148,13 @@ class AskTellFewShot:
                 ) != self._y_formatter(y):
                     alt_ys.append(self._y_formatter(alt_y))
         # choose answer
-        answer = np.random.choice(_answer_choices)
+        answer = np.random.choice(self._answer_choices)
         example_dict = dict(
             x=self._x_formatter(x),
-            i=str(self._example_count + 1),
             Answer=answer,
             y_name=self._y_name,
         )
-        for a in _answer_choices:
+        for a in self._answer_choices:
             if a == answer:
                 example_dict[a] = self._y_formatter(y)
             else:
@@ -159,7 +171,7 @@ class AskTellFewShot:
             self.prompt = self._setup_prompt(
                 example_dict, self._prompt_template, self._suffix, self._prefix
             )
-            self.llm = self._setup_llm(self._model)
+            self.llm = self._setup_llm(self._model, self._temperature)
             self._ready = True
         else:
             # in else, so we don't add twice
@@ -170,7 +182,7 @@ class AskTellFewShot:
         self._example_count += 1
 
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
-        return openai_choice_predict(queries, self.llm)
+        return openai_choice_predict(queries, self.llm, self._verbose)
 
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
@@ -194,7 +206,6 @@ class AskTellFewShot:
         queries = [
             self.prompt.format(
                 x=self._x_formatter(x_i),
-                i=str(self._example_count + 1),
                 y_name=self._y_name,
             )
             for x_i in x
@@ -254,16 +265,16 @@ class AskTellFewShot:
         )
 
 
-class AskTellFewShotTopk(AskTellFewShot):
+class AskTellFewShotTopk(AskTellFewShotMulti):
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
-        return openai_topk_predict(queries, self.llm)
+        return openai_topk_predict(queries, self.llm, self._verbose)
 
-    def _setup_llm(self, model: str):
+    def _setup_llm(self, model: str, temperature: Optional[float] = None):
         # nucleus sampling seems to get more diversity
         return get_llm(
-            n=5,
-            best_of=5,
-            temperature=1,
+            n=self._k,
+            best_of=self._k,
+            temperature=0.1 if temperature is None else temperature,
             model_name=model,
             top_p=0.95,
             stop=["\n", "###", "#", "##"],
@@ -285,20 +296,19 @@ class AskTellFewShotTopk(AskTellFewShot):
     ) -> FewShotPromptTemplate:
         if prefix is None:
             prefix = (
-                "Answer correctly the following questions.\n"
-                "Your answers must be numerical and "
-                "you should end your answer with ###\n\n"
+                "The following are correctly answered questions. "
+                "Each answer is numeric and ends with ###\n"
             )
         if prompt_template is None:
             prompt_template = PromptTemplate(
-                input_variables=["x", "y", "i", "y_name"],
-                template="Q{i}: Given {x}, what is {y_name}?\nA{i}: {y}###\n\n",
+                input_variables=["x", "y", "y_name"],
+                template="Q: Given {x}, what is {y_name}?\nA: {y}###\n\n",
             )
             if suffix is not None:
                 raise ValueError(
                     "Cannot provide suffix if using default prompt template."
                 )
-            suffix = "Q{i}: Given {x}. What is {y_name}?\nA{i}: "
+            suffix = "Q: Given {x}. What is {y_name}?\nA: "
         elif suffix is None:
             raise ValueError("Must provide suffix if using custom prompt template.")
         # test out prompt
@@ -308,12 +318,25 @@ class AskTellFewShotTopk(AskTellFewShot):
         # TODO: make fake example text
         else:
             examples = []
+        example_selector = None
+        if self._selector_k is not None:
+            if len(examples) == 0:
+                raise ValueError("Cannot do zero-shot with selector")
+            example_selector = (
+                example_selector
+            ) = MaxMarginalRelevanceExampleSelector.from_examples(
+                [example],
+                OpenAIEmbeddings(),
+                FAISS,
+                k=self._selector_k,
+            )
         return FewShotPromptTemplate(
-            examples=examples,
+            examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
+            example_selector=example_selector,
             suffix=suffix,
             prefix=prefix,
-            input_variables=["x", "i", "y_name"],
+            input_variables=["x", "y_name"],
         )
 
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
@@ -322,7 +345,6 @@ class AskTellFewShotTopk(AskTellFewShot):
             raise ValueError("Alt ys not supported for topk.")
         example_dict = dict(
             x=self._x_formatter(x),
-            i=self._example_count + 1,
             y=self._y_formatter(y),
             y_name=self._y_name,
         )
