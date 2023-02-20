@@ -26,8 +26,6 @@ class Pool:
         if n > len(self._available):
             raise ValueError("Not enough items in pool")
         samples = np.random.choice(self._available, size=n, replace=False)
-        self._selected.extend(samples)
-        self._available = [x for x in self._available if x not in samples]
         return samples
 
     def choose(self, x: str) -> None:

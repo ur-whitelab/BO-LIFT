@@ -321,7 +321,15 @@ class AskTellFewShotMulti:
             possible_x_l = possible_x.approx_sample(approx_x, inv_filter)
         else:
             possible_x_l = list(possible_x)
-        return self._ask(possible_x_l, best, aq_fxn, k)
+        results = self._ask(possible_x_l, best, aq_fxn, k)
+        if len(results[0]) == 0 and len(possible_x_l) != 0:
+            # if we have nothing, just return random one
+            return (
+                possible_x.sample(k),
+                [0] * k,
+                [0] * k,
+            )
+        return results
 
     def _ask(
         self, possible_x: List[str], best: float, aq_fxn: Callable, k: int
