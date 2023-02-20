@@ -130,12 +130,16 @@ class AskTellFinetuning(AskTellFewShotTopk):
                 completions = [p['y'] for p in self.examples]
                 self.fine_tune(prompts, completions)
                 self.prompt.examples = None
-
         example_dict = dict(
-            x=self._x_formatter(x),
-            y=self._y_formatter(y),
+            x=self.format_x(x),
+            y=self.format_y(y),
             y_name=self._y_name,
         )
         self._ys.append(y)
-        return example_dict
+        inv_dict = dict(
+            x=self.format_x(x),
+            y=self.format_y(y),
+            y_name=self._y_name,
+        )
+        return example_dict, inv_dict
     
