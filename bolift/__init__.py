@@ -1,3 +1,3 @@
 from .version import __version__
-from .asktell import AskTellFewShot, AskTellFewShotTopk
+from .asktell import AskTellFewShotMulti, AskTellFewShotTopk
 from .asktellfinetuning import AskTellFinetuning

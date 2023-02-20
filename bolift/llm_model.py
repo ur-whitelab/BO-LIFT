@@ -130,18 +130,30 @@ def parse_response_topk(generations):
     return DiscreteDist(np.array(values), probs)
 
 
-def openai_choice_predict(query_list, llm, *args, **kwargs):
+def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
     """Predict the output numbers for a given list of queries"""
     completion_response = llm.generate(query_list, *args, **kwargs)
+    if verbose:
+        print("-" * 80)
+        print(query_list[0])
+        print("-" * 80)
+        print(query_list[0] + completion_response.generations[0][0].text)
+        print("-" * 80)
     results = []
     for gen, q in zip(completion_response.generations, query_list):
         results.append(parse_response(gen[0], q, llm))
     return results
 
 
-def openai_topk_predict(query_list, llm, *args, **kwargs):
+def openai_topk_predict(query_list, llm, verbose, *args, **kwargs):
     """Predict the output numbers for a given list of queries"""
     completion_response = llm.generate(query_list, *args, **kwargs)
+    if verbose:
+        print("-" * 80)
+        print(query_list[0])
+        print("-" * 80)
+        print(query_list[0] + completion_response.generations[0][0].text)
+        print("-" * 80)
     results = []
     for gens in completion_response.generations:
         results.append(parse_response_topk(gens))
