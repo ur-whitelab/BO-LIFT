@@ -218,3 +218,62 @@ def test_ask_zero_fewshot_topk():
     _, scores, means = asktell.ask([2, 8], k=2)
     assert scores[0] > scores[1]
     asktell.ask([2, 8], k=2, aq_fxn="greedy")
+
+
+def test_ask_ei_fewshot_finetune():
+    asktell = bolift.AskTellFinetuning(
+        x_formatter=lambda x: f"y = 2 * {x}",
+        finetune=False,
+    )
+    asktell.tell(2, 4)
+    asktell.tell(1, 2)
+    asktell.tell(16, 32)
+    best, _, _ = asktell.ask([2, 8])
+    assert best[0] == 8
+
+
+def test_ask_zero_fewshot_finetune():
+    asktell = bolift.AskTellFinetuning(
+        x_formatter=lambda x: f"y = f({x}) for the shifted Ackley function",
+        model="text-babbage-001",
+    )
+    _, scores, means = asktell.ask([2, 8], k=2)
+    assert scores[0] > scores[1]
+    asktell.ask([2, 8], k=2, aq_fxn="greedy")
+
+
+def test_prepare_data_finetuning():
+    import os
+    asktell = bolift.AskTellFinetuning(
+        x_formatter=lambda x: f"y = 2 * {x}",
+        model="text-babbage-001",
+        finetune=True
+    )
+    prompts = ["2", "4", "8"]
+    completions = ["4", "8", "16"]
+    asktell.prepare_data(prompts, completions, "./test.jsonl")
+    assert os.path.exists("./test.jsonl")
+    assert open("./test.jsonl").readlines() == ['{"prompt": "2", "completion": "4"}\n', '{"prompt": "4", "completion": "8"}\n', '{"prompt": "8", "completion": "16"}\n']
+    os.remove("./test.jsonl")
+
+
+def test_upload_data_finetuning():
+    import os, openai, time
+    asktell = bolift.AskTellFinetuning(
+        x_formatter=lambda x: f"y = 2 * {x}",
+        model="text-babbage-001",
+        finetune=True
+    )
+    prompts = ["2", "4", "8"]
+    completions = ["4", "8", "16"]
+    asktell.prepare_data(prompts, completions, "./test.jsonl")
+    file_id = asktell.upload_data("./test.jsonl")
+    time.sleep(3) # Sometimes it take a few seconds for the file to be uploaded
+    assert file_id is not None
+    assert (openai.File.retrieve(file_id).status == "uploaded" 
+            or 
+            openai.File.retrieve(file_id).status == "processed")
+    os.remove("./test.jsonl")
+    openai.File.delete(file_id)
+
+
