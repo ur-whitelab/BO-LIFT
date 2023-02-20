@@ -249,6 +249,10 @@ class AskTellFewShotMulti:
             self.llm = self._setup_llm(self._model)
             self._ready = True
 
+        if self._selector_k is not None:
+            # have to update this until my PR is merged
+            self.prompt.example_selector.k = min(self._example_count, self._selector_k)
+
         queries = [
             self.prompt.format(
                 x=self.format_x(x_i),
