@@ -1,31 +1,17 @@
 import os
 import openai
 import numpy as np
-from functools import partial
 import pandas as pd
-from pyrate_limiter import Duration, Limiter, RequestRate
 import time
 import json
 
 from typing import *
-from .asktell import AskTellFewShot
-from langchain.prompts.few_shot import FewShotPromptTemplate
+from .asktell import AskTellFewShotTopk
 from langchain.prompts.prompt import PromptTemplate
+from langchain.prompts.few_shot import FewShotPromptTemplate
 
-from .llm_model import (
-    get_llm, 
-    openai_choice_predict, 
-    openai_topk_predict, 
-    DiscreteDist,
-)
-from .aqfxns import (
-    probability_of_improvement,
-    expected_improvement,
-    upper_confidence_bound,
-    greedy,
-)
 
-class AskTellFinetuning(AskTellFewShot):
+class AskTellFinetuning(AskTellFewShotTopk):
     def __init__(
         self,
         prompt_template: PromptTemplate = None,
@@ -35,33 +21,36 @@ class AskTellFinetuning(AskTellFewShot):
         x_formatter: Callable[[str], str] = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y: 0.2f}",
         y_name: str = "y",
+        selector_k: Optional[int] = None,
         id: str = None,
-        n_epochs: int = 2,
+        n_epochs: int = 4,
         batch_size: int = 1,
-        finetune: bool = False
+        finetune: bool = False,
+        examples: List[Tuple[str, float]] = [],
     ) -> None:
-        super().__init__(prompt_template, suffix, model, prefix, x_formatter, y_formatter, y_name)
+        super().__init__(prompt_template, suffix, model, prefix, x_formatter, y_formatter, y_name, selector_k)
         self.n_epochs = n_epochs
         self.batch_size = batch_size
         self.response = None
         self.finetune = finetune
         self.base_model = model.split("-")[1]
+        self.examples = examples
         if(id):
             self.response = openai.FineTune.retrieve(id=id)
             self.base_model = self.response["fine_tuned_model"]
-        self.llm = self._setup_llm(model=self.base_model)
+        # self.llm = self._setup_llm(model=self.base_model)
 
 
     def prepare_data_from_file(self, inFile, outFile):
         reg_df = pd.read_csv(inFile)
-        # reg_df.to_json("regression_dataset_sial_ratio.jsonl", orient='records', lines=True)
         with open(outFile, "w") as f:
             for e in range(len(reg_df)):
-                f.write(f'{{"prompt": "{reg_df.iloc[e]["prompt"]}", "completion": "{reg_df.iloc[e]["completion"]}"}}\n')
+                f.write(f'{{"prompt":"{reg_df.iloc[e]["prompt"]}", "completion":"{reg_df.iloc[e]["completion"]}"}}\n')
 
     def prepare_data(self, prompts, completions, outFile):
         with open(outFile, "w") as f:
             for p,c in zip(prompts, completions):
+                p = p.replace('°', '')	
                 f.write(f'{{"prompt": "{p}", "completion": "{c}"}}\n')
 
             
@@ -95,7 +84,6 @@ class AskTellFinetuning(AskTellFewShot):
                         )
         file_id = self.upload_data(f"{out_path}/train_data_{len(self.prompt.examples)}.jsonl")
 
-        print(self.base_model)
         response = self.create_fineTune(file_id, self.base_model)
 
         s = openai.FineTune.retrieve(id=response["id"]).status
@@ -121,54 +109,23 @@ class AskTellFinetuning(AskTellFewShot):
         self.llm = self._setup_llm(model=self.response["fine_tuned_model"])
 
         with open(f"{out_path}/FT_model_{len(self.prompt.examples)}.dat", "w") as out:
-            out.write(json.dumps(response, indent=4))
+            out.write(json.dumps(self.response, indent=4))
 
 
     def get_model_id(self):
-        return self.response["fine_tuned_model"]
-
-
-    # def _setup_prompt(
-    #     self,
-    #     prompt_template: Optional[PromptTemplate] = None,
-    #     suffix: Optional[str] = None,
-    #     prefix: Optional[str] = None,
-    # ) -> FewShotPromptTemplate:
-    #     if prefix is None:
-    #         prefix = (
-    #             "Answer correctly the following questions.\n"
-    #             "Your answers must be numerical and "
-    #             "you should end your answer with ###\n\n"
-    #         )
-    #     if prompt_template is None:
-    #         prompt_template = PromptTemplate(
-    #             input_variables=["x", "y", "i", "y_name"],
-    #             template="Q{i}: Given {x}, what is {y_name}?\nA{i}: {y}###\n\n",
-    #         )
-    #         if suffix is not None:
-    #             raise ValueError(
-    #                 "Cannot provide suffix if using default prompt template."
-    #             )
-    #         suffix = "Q{i}: Given {x}, what is {y_name}?\nA{i}: "
-    #     elif suffix is None:
-    #         raise ValueError("Must provide suffix if using custom prompt template.")
-    #     # test out prompt
-    #     prompt_template.format(x="test", y="2.3", i=1, y_name="tee")
-    #     return FewShotPromptTemplate(
-    #         examples=[],
-    #         example_prompt=prompt_template,
-    #         suffix=suffix,
-    #         prefix=prefix,
-    #         input_variables=["x", "i", "y_name"],
-    #     )
-
-
-    # def _predict(self, queries: List[str]) -> List[DiscreteDist]:
-    #     return openai_topk_predict(queries, self.llm)
+        return self.response["fine_tuned_model"] if self.response else self.base_model
 
 
     def predict(self, xs):
         xs = xs if isinstance(xs, list) else [xs]
+        if not self._ready:
+            # special zero-shot
+            self.prompt = self._setup_prompt(
+                None, self._prompt_template, self._suffix, self._prefix
+            )
+            self.llm = self._setup_llm(self.base_model)
+            self._ready = True
+
         queries = [
             self.prompt.format(
                 x=self._x_formatter(x_i),
@@ -177,17 +134,29 @@ class AskTellFinetuning(AskTellFewShot):
             )
             for x_i in xs
         ]
-        print(self.base_model)
-        if(self.finetune):
-            # Maybe run this only when we have a few new prompts? Each 5 new points??
-            if len(self.prompt.examples)%2 == 0 and len(self.prompt.examples)>0:
-                prompts = [p['x'] for p in self.prompt.examples]
-                completions = [p[p['Answer']] for p in self.prompt.examples]
-                self.fineTune(prompts, completions)
 
-            # 2 points -> ft-H3Bx697RyEZYZ7OAhtcPUnEI
-            # 4 points -> ft-h3p6ILhhtNCi1QFDsGB89amC
-            # self.response = openai.FineTune.retrieve(id="ft-H3Bx697RyEZYZ7OAhtcPUnEI")
-            # self.llm = self._setup_llm(model=self.response["fine_tuned_model"])
         results = self._predict(queries)
         return results
+    
+    def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
+        """Tell the optimizer about a new example."""
+        if alt_ys is not None:
+            raise ValueError("Alt ys not supported for topk.")
+        
+        if(self.finetune):
+            if len(self.prompt.examples)%5 == 0 and len(self.prompt.examples)>0:
+                prompts = [f"Q{p['i']}: Given {p['x']}. What is {self._y_name}?\\nA{p['i']}: "
+                            for p in self.prompt.examples]
+                completions = [p['y'] for p in self.prompt.examples]
+                self.fineTune(prompts, completions)
+                self.examples.extend(self.prompt.examples)
+                self.prompt.examples = None
+
+        example_dict = dict(
+            x=self._x_formatter(x),
+            i=self._example_count + 1,
+            y=self._y_formatter(y),
+            y_name=self._y_name,
+        )
+        self._ys.append(y)
+        return example_dict
