@@ -1,6 +1,7 @@
 import numpy as np
 import re
 from langchain.llms import OpenAI
+from langchain.callbacks import get_openai_callback
 from langchain.cache import InMemoryCache
 import langchain
 from dataclasses import dataclass
@@ -132,7 +133,9 @@ def parse_response_topk(generations):
 
 def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
     """Predict the output numbers for a given list of queries"""
-    completion_response = llm.generate(query_list, *args, **kwargs)
+    with get_openai_callback() as cb:
+        completion_response = llm.generate(query_list, *args, **kwargs)
+        token_usage = cb.total_tokens
     if verbose:
         print("-" * 80)
         print(query_list[0])
@@ -142,12 +145,14 @@ def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
     results = []
     for gen, q in zip(completion_response.generations, query_list):
         results.append(parse_response(gen[0], q, llm))
-    return results
+    return results, token_usage
 
 
 def openai_topk_predict(query_list, llm, verbose, *args, **kwargs):
     """Predict the output numbers for a given list of queries"""
-    completion_response = llm.generate(query_list, *args, **kwargs)
+    with get_openai_callback() as cb:
+        completion_response = llm.generate(query_list, *args, **kwargs)
+        token_usage = cb.total_tokens
     if verbose:
         print("-" * 80)
         print(query_list[0])
@@ -157,4 +162,4 @@ def openai_topk_predict(query_list, llm, verbose, *args, **kwargs):
     results = []
     for gens in completion_response.generations:
         results.append(parse_response_topk(gens))
-    return results
+    return results, token_usage
