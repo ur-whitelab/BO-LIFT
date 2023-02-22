@@ -235,7 +235,7 @@ def test_ask_ei_fewshot_finetune():
 def test_ask_zero_fewshot_finetune():
     asktell = bolift.AskTellFinetuning(
         x_formatter=lambda x: f"y = f({x}) for the shifted Ackley function",
-        model="text-babbage-001",
+        model="text-ada-001",
     )
     _, scores, means = asktell.ask([2, 8], k=2)
     assert scores[0] > scores[1]
@@ -244,36 +244,52 @@ def test_ask_zero_fewshot_finetune():
 
 def test_prepare_data_finetuning():
     import os
+
     asktell = bolift.AskTellFinetuning(
-        x_formatter=lambda x: f"y = 2 * {x}",
-        model="text-babbage-001",
-        finetune=True
+        x_formatter=lambda x: f"y = 2 * {x}", model="text-ada-001", finetune=True
     )
     prompts = ["2", "4", "8"]
     completions = ["4", "8", "16"]
     asktell.prepare_data(prompts, completions, "./test.jsonl")
     assert os.path.exists("./test.jsonl")
-    assert open("./test.jsonl").readlines() == ['{"prompt": "2", "completion": "4"}\n', '{"prompt": "4", "completion": "8"}\n', '{"prompt": "8", "completion": "16"}\n']
+    assert open("./test.jsonl").readlines() == [
+        '{"prompt": "2", "completion": "4"}\n',
+        '{"prompt": "4", "completion": "8"}\n',
+        '{"prompt": "8", "completion": "16"}\n',
+    ]
     os.remove("./test.jsonl")
 
 
 def test_upload_data_finetuning():
-    import os, openai, time
+    import os
+    import openai
+    import time
+
     asktell = bolift.AskTellFinetuning(
-        x_formatter=lambda x: f"y = 2 * {x}",
-        model="text-babbage-001",
-        finetune=True
+        x_formatter=lambda x: f"y = 2 * {x}", model="text-ada-001", finetune=True
     )
     prompts = ["2", "4", "8"]
     completions = ["4", "8", "16"]
     asktell.prepare_data(prompts, completions, "./test.jsonl")
     file_id = asktell.upload_data("./test.jsonl")
-    time.sleep(3) # Sometimes it take a few seconds for the file to be uploaded
+    time.sleep(3)  # Sometimes it take a few seconds for the file to be uploaded
     assert file_id is not None
-    assert (openai.File.retrieve(file_id).status == "uploaded" 
-            or 
-            openai.File.retrieve(file_id).status == "processed")
+    assert (
+        openai.File.retrieve(file_id).status == "uploaded"
+        or openai.File.retrieve(file_id).status == "processed"
+    )
     os.remove("./test.jsonl")
     openai.File.delete(file_id)
 
 
+def test_llm_usage():
+    asktell = bolift.AskTellFewShotMulti(
+        x_formatter=lambda x: f"y = 2 + {x}",
+        selector_k=10,
+        y_formatter=lambda y: str(int(y)),
+    )
+    for i in range(5):
+        asktell.tell(i, 2 + i)
+    dist = asktell.predict(3)
+    print(asktell.tokens_used)
+    assert asktell.tokens_used > 0

@@ -66,6 +66,7 @@ class AskTellFewShotMulti:
         self._k = k
         self._answer_choices = _answer_choices[:k]
         self._verbose = verbose
+        self.tokens_used = 0
 
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         return get_llm(
@@ -260,7 +261,9 @@ class AskTellFewShotMulti:
             )
             for x_i in x
         ]
-        results = self._predict(queries)
+        results, tokens = self._predict(queries)
+        print(tokens)
+        self.tokens_used += tokens
 
         # compute mean and standard deviation
         if len(x) == 1:
