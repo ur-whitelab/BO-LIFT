@@ -262,7 +262,6 @@ class AskTellFewShotMulti:
             for x_i in x
         ]
         results, tokens = self._predict(queries)
-        print(tokens)
         self.tokens_used += tokens
 
         # compute mean and standard deviation
