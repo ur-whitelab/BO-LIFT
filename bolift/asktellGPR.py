@@ -9,7 +9,6 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel, PairwiseKernel, RBF
 from langchain.embeddings import OpenAIEmbeddings
 
-
 def cosine_similarity(X, Y=None, dense_output=True, gamma=None):
     if Y is None:
         Y = X
@@ -26,29 +25,68 @@ def cosine_similarity(X, Y=None, dense_output=True, gamma=None):
 class AskTellGPR(AskTellFewShotTopk):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # self._selector_k = 0
         self._set_regressor()
-        self._embedding = OpenAIEmbeddings()
         self.examples = []
+        self._embedding = OpenAIEmbeddings()
+        self._embeddings_cache = pd.DataFrame({'x':[], 'embedding':[]})
+        # self._embeddings_cache = {}
+
+
+    def _query_cache(self, X):
+        in_cache = self._embeddings_cache['x'].to_list()
+        # in_cache = self._embeddings_cache.keys()
+        not_in_cache = np.setdiff1d(X, in_cache)
+        new_embeddings = []
+        if not_in_cache.size > 0:
+            new_embeddings = self._embedding.embed_documents(not_in_cache.tolist(), 250)
+        self._embeddings_cache = pd.concat(
+            [
+                self._embeddings_cache, 
+                pd.DataFrame({'x':not_in_cache, 'embedding':new_embeddings})
+            ], ignore_index=True)
+        embedding = [
+            self._embeddings_cache[self._embeddings_cache['x']==xi]['embedding'].to_list()[0] 
+            for xi in X
+            ]
+        # self._embeddings_cache = {**self._embeddings_cache, **dict(zip(not_in_cache, new_embeddings))}
+        # print('update cache', ti-time.time())
+        # embedding = [
+        #     self._embeddings_cache[xi] 
+        #     for xi in X
+        # ]
+
+        if len(embedding) != len(X):
+            raise ValueError(('Embedding length does not match X length.'
+                              'Something went wrong on caching.'))
+            # print(self._embeddings_cache[self._embeddings_cache['x'].isin(X)])
+            # print(X)
+
+        return embedding
+
 
     def _set_regressor(self):
-        cosine_kernel = PairwiseKernel(metric="rbf")
-        constant_kernel = ConstantKernel(
-            constant_value=1.0, constant_value_bounds="fixed"
-        )
+        cosine_kernel = PairwiseKernel(metric=cosine_similarity)
+        constant_kernel = ConstantKernel(constant_value=1.0, constant_value_bounds="fixed")
         cos_kernel = constant_kernel * cosine_kernel
         self.regressor = GaussianProcessRegressor(
-            kernel=RBF(length_scale=1e-3, length_scale_bounds=(1e-10, 1e1)),
-            # kernel=cos_kernel,
+            # kernel=RBF(length_scale=1e-3, length_scale_bounds=(1e-10, 1e1)),
+            kernel=cos_kernel,
             n_restarts_optimizer=2,
             normalize_y=True,
         )
 
+
     def _predict(self, X):
-        embedding = np.array(self._embedding.embed_documents(X, 250))
+        if(len(X) == 0):
+            raise ValueError("X is empty")
+        embedding=self._query_cache(X)
+        # embedding = np.array(self._embedding.embed_documents(X, 250))
         results = []
         means, stds = self.regressor.predict(embedding, return_std=True)
         results = [GaussDist(mean, std) for mean, std in zip(means, stds)]
         return results, 0
+
 
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None):
         example_dict = dict(
@@ -61,7 +99,7 @@ class AskTellGPR(AskTellFewShotTopk):
         self._train(
             [ex["x"] for ex in self.examples], [ex["y"] for ex in self.examples]
         )
-
+        
         self._ys.append(y)
         inv_dict = dict(
             x=self.format_x(x),
@@ -70,9 +108,12 @@ class AskTellGPR(AskTellFewShotTopk):
         )
         return example_dict, inv_dict
 
+
     def _train(self, X, y):
-        embedding = np.array(self._embedding.embed_documents(X, 250))
+        embedding=self._query_cache(X)
+        # embedding = np.array(self._embedding.embed_documents(X, 250))
         self.regressor.fit(embedding, list(map(float, y)))
+
 
     def ask(
         self,
@@ -84,3 +125,26 @@ class AskTellGPR(AskTellFewShotTopk):
     ) -> Tuple[List[str], List[float], List[float]]:
         # just have this here to override default
         return super().ask(possible_x, aq_fxn, k, 0, _lambda)
+
+
+    def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
+        """Tell the optimizer about a new example."""
+        example_dict, inv_example = self._tell(x, y, alt_ys)
+        # we want to have example
+        # to initialize prompts, so send it
+        if not self._ready:
+            self.prompt = self._setup_prompt(
+                example_dict, self._prompt_template, self._suffix, self._prefix
+            )
+            self.inv_prompt = self._setup_inverse_prompt(inv_example)
+            self.llm = self._setup_llm(self._model, self._temperature)
+            self._ready = True
+        # else:
+        #     # in else, so we don't add twice
+        #     if self._selector_k is not None:
+        #         self.prompt.example_selector.add_example(example_dict)
+        #         self.inv_prompt.example_selector.add_example(inv_example)
+        #     else:
+        #         self.prompt.examples.append(example_dict)
+        #         self.inv_prompt.examples.append(inv_example)
+        # self._example_count += 1
