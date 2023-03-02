@@ -338,8 +338,8 @@ class AskTellFewShotMulti:
     ) -> Tuple[List[str], List[float], List[float]]:
         results = self.predict(possible_x)
         # drop empties
-        results = [r for r in results if len(r.probs) > 0]
-        aq_vals = [aq_fxn(r.probs, r.values, best) for r in results]
+        results = [r for r in results if len(r) > 0]
+        aq_vals = [aq_fxn(r, best) for r in results]
         selected = np.argsort(aq_vals)[::-1][:k]
         means = [r.mean() for r in results]
         return (

@@ -293,3 +293,14 @@ def test_llm_usage():
     dist = asktell.predict(3)
     print(asktell.tokens_used)
     assert asktell.tokens_used > 0
+
+
+def test_gpr():
+    asktell = bolift.AskTellGPR(
+        x_formatter=lambda x: f"y = 2 + {x}",
+        y_formatter=lambda y: str(int(y)),
+    )
+    for i in range(5):
+        asktell.tell(i, 2 + i)
+    asktell.predict(5000)
+    assert asktell.ask([2, 8])[0][0] == 8
