@@ -27,6 +27,33 @@ class DiscreteDist:
     def __repr__(self):
         return f"DiscreteDist({self.values}, {self.probs})"
 
+    def __len__(self):
+        return len(self.values)
+
+
+@dataclass
+class GaussDist:
+    _mean: float
+    _std: float
+
+    def sample(self):
+        return np.random.normal(self._mean, self._std)
+
+    def mean(self):
+        return self._mean
+
+    def mode(self):
+        return self._mean
+
+    def std(self):
+        return self._std
+
+    def __repr__(self):
+        return f"GaussDist({self._mean}, {self._std})"
+
+    def __len__(self):
+        return 1
+
 
 langchain.llm_cache = InMemoryCache()
 

@@ -6,7 +6,18 @@ from langchain.embeddings import OpenAIEmbeddings
 
 
 class Pool:
-    """Class for sampling from pool of possible data points"""
+    """Class for sampling from pool of possible data points
+
+    Example:
+        >>> pool = Pool(['a', 'b', 'c', 'd', 'e'])
+        >>> pool.sample(3)
+        ['a', 'd', 'c']
+        >>> pool.choose('a')
+        >>> pool.sample(3)
+        ['b', 'c', 'd']
+        >>> pool.approx_sample('a', 3)
+        ['b', 'c', 'd']
+    """
 
     def __init__(self, pool: List[Any], formatter: Callable = lambda x: str(x)) -> None:
         if type(pool) is not list:
