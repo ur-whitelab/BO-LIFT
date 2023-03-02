@@ -1,0 +1,133 @@
+{
+    "object": "fine-tune",
+    "id": "ft-x1VsJUtb4Tr9RGQvXgNlLuNF",
+    "hyperparams": {
+        "n_epochs": 8,
+        "batch_size": 1,
+        "prompt_loss_weight": 0.01,
+        "learning_rate_multiplier": 0.02
+    },
+    "organization_id": "org-zVzDC0J6UhWoGf9pmQAfuLud",
+    "model": "ada",
+    "training_files": [
+        {
+            "object": "file",
+            "id": "file-f77Yea31DzOhHGxAb8R108qw",
+            "purpose": "fine-tune",
+            "filename": "FTimplementation.jsonl",
+            "bytes": 28404,
+            "created_at": 1677180583,
+            "status": "processed",
+            "status_details": null
+        }
+    ],
+    "validation_files": [],
+    "result_files": [
+        {
+            "object": "file",
+            "id": "file-3T5KgSAXCVi8I2JvruVzzt6U",
+            "purpose": "fine-tune-results",
+            "filename": "compiled_results.csv",
+            "bytes": 69245,
+            "created_at": 1677181364,
+            "status": "uploaded",
+            "status_details": null
+        }
+    ],
+    "created_at": 1677180583,
+    "updated_at": 1677181364,
+    "status": "succeeded",
+    "fine_tuned_model": "ada:ft-white-research-laboratory-2023-02-23-19-42-43",
+    "events": [
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Created fine-tune: ft-x1VsJUtb4Tr9RGQvXgNlLuNF",
+            "created_at": 1677180583
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune costs $0.04",
+            "created_at": 1677181089
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune enqueued. Queue number: 0",
+            "created_at": 1677181090
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune started",
+            "created_at": 1677181095
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 1/8",
+            "created_at": 1677181142
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 2/8",
+            "created_at": 1677181171
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 3/8",
+            "created_at": 1677181201
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 4/8",
+            "created_at": 1677181230
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 5/8",
+            "created_at": 1677181259
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 6/8",
+            "created_at": 1677181288
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 7/8",
+            "created_at": 1677181317
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 8/8",
+            "created_at": 1677181346
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Uploaded model: ada:ft-white-research-laboratory-2023-02-23-19-42-43",
+            "created_at": 1677181363
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Uploaded result file: file-3T5KgSAXCVi8I2JvruVzzt6U",
+            "created_at": 1677181364
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune succeeded",
+            "created_at": 1677181364
+        }
+    ]
+}
