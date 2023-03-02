@@ -26,20 +26,21 @@ class AskTellFinetuning(AskTellFewShotTopk):
         k: int = 5,
         verbose: bool = False,
         id: str = None,
-        n_epochs: int = 4,
-        batch_size: int = 1,
+        n_epochs: int = 8,
+        learning_rate_multiplier: int = 0.02,
         finetune: bool = False,
         examples: List[Tuple[str, float]] = [],
     ) -> None:
         super().__init__(prompt_template, suffix, model, temperature, prefix, x_formatter, y_formatter, y_name, selector_k, k, verbose)
         self.n_epochs = n_epochs
-        self.batch_size = batch_size
+        self.learning_rate_multiplier = learning_rate_multiplier
         self.response = None
         self.finetune = finetune
         self.base_model = model.split("-")[1]
         self.examples = examples
         if(id):
             self.response = openai.FineTune.retrieve(id=id)
+            self._model = self.response["fine_tuned_model"]
             self.base_model = self.response["fine_tuned_model"]
         # self.llm = self._setup_llm(model=self.base_model)
 
@@ -72,12 +73,12 @@ class AskTellFinetuning(AskTellFewShotTopk):
                               training_file=file_id, 
                               model=base_model,
                               n_epochs=self.n_epochs,
-                              batch_size=self.batch_size, 
+                              learning_rate_multiplier=self.learning_rate_multiplier, 
                             )
         return response
 
 
-    def fine_tune(self, prompts, completions, out_path="./out") -> None:
+    def fine_tune(self, prompts, completions, out_path="./out", out_file=None) -> None:
         if not os.path.exists(f"{out_path}"):
             os.makedirs(f"{out_path}")
         self.prepare_data(prompts,
@@ -109,9 +110,12 @@ class AskTellFinetuning(AskTellFewShotTopk):
         self.response = openai.FineTune.retrieve(id=response["id"])
         self.base_model = self.response["fine_tuned_model"]
         self.llm = self._setup_llm(model=self.response["fine_tuned_model"])
-
-        with open(f"{out_path}/FT_model_{len(self.prompt.examples)}.dat", "w") as out:
-            out.write(json.dumps(self.response, indent=4))
+        if(out_file):
+            with open(f"{out_path}/{out_file}.dat", "w") as out:
+                out.write(json.dumps(self.response, indent=4))
+        else:
+            with open(f"{out_path}/FT_model_{len(self.prompt.examples)}.dat", "w") as out:
+                out.write(json.dumps(self.response, indent=4))
 
 
     def get_model_name(self):
