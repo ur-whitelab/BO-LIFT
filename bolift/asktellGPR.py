@@ -23,14 +23,30 @@ def cosine_similarity(X, Y=None, dense_output=True, gamma=None):
 
 
 class AskTellGPR(AskTellFewShotTopk):
-    def __init__(self, **kwargs):
+    def __init__(self, cache_path=None, **kwargs):
         super().__init__(**kwargs)
         # self._selector_k = 0
         self._set_regressor()
         self.examples = []
         self._embedding = OpenAIEmbeddings()
-        self._embeddings_cache = pd.DataFrame({'x':[], 'embedding':[]})
+        self._embeddings_cache = self._get_cache(cache_path)
+        # self._embeddings_cache = pd.DataFrame({'x':[], 'embedding':[]})
         # self._embeddings_cache = {}
+
+
+    # I need to get the query from a persisted file
+    def _get_cache(self, cache_path=None):
+        try:
+            cache = pd.read_csv(cache_path)
+            print(f"Loaded cache from {cache_path}.")
+        except:
+            print("Cached embeddings not found. Creating new cache table.")
+            cache = pd.DataFrame({'x':[], 'embedding':[]})
+        return cache
+
+
+    def save_cache(self, cache_path):
+        self._embeddings_cache.to_csv(cache_path, index=False)
 
 
     def _query_cache(self, X):
@@ -87,28 +103,6 @@ class AskTellGPR(AskTellFewShotTopk):
         results = [GaussDist(mean, std) for mean, std in zip(means, stds)]
         return results, 0
 
-
-    def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None):
-        example_dict = dict(
-            x=self.format_x(x),
-            y=self.format_y(y),
-            y_name=self._y_name,
-        )
-        self.examples.append(example_dict)
-
-        self._train(
-            [ex["x"] for ex in self.examples], [ex["y"] for ex in self.examples]
-        )
-        
-        self._ys.append(y)
-        inv_dict = dict(
-            x=self.format_x(x),
-            y=self.format_y(y),
-            y_name=self._y_name,
-        )
-        return example_dict, inv_dict
-
-
     def _train(self, X, y):
         embedding=self._query_cache(X)
         # embedding = np.array(self._embedding.embed_documents(X, 250))
@@ -134,17 +128,20 @@ class AskTellGPR(AskTellFewShotTopk):
         # to initialize prompts, so send it
         if not self._ready:
             self.prompt = self._setup_prompt(
-                example_dict, self._prompt_template, self._suffix, self._prefix
+                None, self._prompt_template, self._suffix, self._prefix
             )
             self.inv_prompt = self._setup_inverse_prompt(inv_example)
             self.llm = self._setup_llm(self._model, self._temperature)
             self._ready = True
-        # else:
-        #     # in else, so we don't add twice
-        #     if self._selector_k is not None:
-        #         self.prompt.example_selector.add_example(example_dict)
-        #         self.inv_prompt.example_selector.add_example(inv_example)
-        #     else:
-        #         self.prompt.examples.append(example_dict)
-        #         self.inv_prompt.examples.append(inv_example)
-        # self._example_count += 1
+
+        self.examples.append(example_dict)
+
+        self._train(
+            [self.prompt.format(
+                x=ex["x"],
+                y_name=self._y_name,
+                )
+             for ex in self.examples
+            ], 
+            [ex["y"] for ex in self.examples]
+        )
