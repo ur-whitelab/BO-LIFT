@@ -7,8 +7,10 @@ from .llm_model import GaussDist
 from typing import *
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel, PairwiseKernel, RBF
-from langchain.embeddings import OpenAIEmbeddings
+from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
 
+
+openai_models = ["text-embedding-ada-002","text-embedding-divinci-001","text-embedding-curie-001","text-embedding-babbage-001","text-embedding-ada-001"]
 
 def cosine_similarity(X, Y=None, dense_output=True, gamma=None):
     if Y is None:
@@ -24,11 +26,18 @@ def cosine_similarity(X, Y=None, dense_output=True, gamma=None):
 
 
 class AskTellGPR(AskTellFewShotTopk):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._set_regressor()
-        self._embedding = OpenAIEmbeddings()
+
+        if model not in models:   # model = Dagobert42/bert-base-uncased-finetuned-material-synthesis
+            self._embedding = HuggingFaceEmbeddings()
+        else:
+            self._embedding = OpenAIEmbeddings()
         self.examples = []
+       
+         
 
     def _set_regressor(self):
         cosine_kernel = PairwiseKernel(metric="rbf")
