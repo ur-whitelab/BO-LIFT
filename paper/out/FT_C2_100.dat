@@ -1,0 +1,181 @@
+{
+    "object": "fine-tune",
+    "id": "ft-NllxJd6BjeT76FnwFFE9YoGH",
+    "hyperparams": {
+        "n_epochs": 8,
+        "batch_size": 1,
+        "prompt_loss_weight": 0.01,
+        "learning_rate_multiplier": 0.05
+    },
+    "organization_id": "org-zVzDC0J6UhWoGf9pmQAfuLud",
+    "model": "ada",
+    "training_files": [
+        {
+            "object": "file",
+            "id": "file-mDdtIxPkqRT2AGkqfbZ2bjrW",
+            "purpose": "fine-tune",
+            "filename": "FTimplementation.jsonl",
+            "bytes": 42508,
+            "created_at": 1678235124,
+            "status": "processed",
+            "status_details": null
+        }
+    ],
+    "validation_files": [],
+    "result_files": [
+        {
+            "object": "file",
+            "id": "file-CWHi4kwMWZBY5E6gv5bwCDhj",
+            "purpose": "fine-tune-results",
+            "filename": "compiled_results.csv",
+            "bytes": 34092,
+            "created_at": 1678240555,
+            "status": "processed",
+            "status_details": null
+        }
+    ],
+    "created_at": 1678235124,
+    "updated_at": 1678240555,
+    "status": "succeeded",
+    "fine_tuned_model": "ada:ft-white-research-laboratory-2023-03-08-01-55-55",
+    "events": [
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Created fine-tune: ft-NllxJd6BjeT76FnwFFE9YoGH",
+            "created_at": 1678235124
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune costs $0.05",
+            "created_at": 1678237737
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune enqueued. Queue number: 8",
+            "created_at": 1678237738
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune is in the queue. Queue number: 7",
+            "created_at": 1678238171
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune is in the queue. Queue number: 6",
+            "created_at": 1678238568
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune is in the queue. Queue number: 5",
+            "created_at": 1678238807
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune is in the queue. Queue number: 4",
+            "created_at": 1678238864
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune is in the queue. Queue number: 3",
+            "created_at": 1678239494
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune is in the queue. Queue number: 2",
+            "created_at": 1678239659
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune is in the queue. Queue number: 1",
+            "created_at": 1678239679
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune is in the queue. Queue number: 0",
+            "created_at": 1678239693
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune started",
+            "created_at": 1678240402
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 1/8",
+            "created_at": 1678240431
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 2/8",
+            "created_at": 1678240446
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 3/8",
+            "created_at": 1678240461
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 4/8",
+            "created_at": 1678240476
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 5/8",
+            "created_at": 1678240491
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 6/8",
+            "created_at": 1678240506
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 7/8",
+            "created_at": 1678240521
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Completed epoch 8/8",
+            "created_at": 1678240536
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Uploaded model: ada:ft-white-research-laboratory-2023-03-08-01-55-55",
+            "created_at": 1678240555
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Uploaded result file: file-CWHi4kwMWZBY5E6gv5bwCDhj",
+            "created_at": 1678240555
+        },
+        {
+            "object": "fine-tune-event",
+            "level": "info",
+            "message": "Fine-tune succeeded",
+            "created_at": 1678240555
+        }
+    ]
+}

@@ -272,6 +272,8 @@ class AskTellFewShotMulti:
                 ystd = self._ys[0]
             else:
                 ystd = 10
+            if ystd == 0:
+                ystd = 10
             if isinstance(result, GaussDist):
                 results[i].set_std(ystd)
 
