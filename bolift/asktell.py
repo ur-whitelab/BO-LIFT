@@ -266,13 +266,11 @@ class AskTellFewShotMulti:
 
         # need to replace any GaussDist with pop std
         for i, result in enumerate(results):
-            if self._example_count > 1:
+            if len(self._ys) > 1:
                 ystd = np.std(self._ys)
-            elif self._example_count == 1:
+            elif len(self._ys) == 1:
                 ystd = self._ys[0]
             else:
-                ystd = 10
-            if ystd == 0:
                 ystd = 10
             if isinstance(result, GaussDist):
                 results[i].set_std(ystd)
