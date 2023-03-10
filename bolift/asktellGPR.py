@@ -86,26 +86,28 @@ class AskTellGPR(AskTellFewShotTopk):
         constant_kernel = ConstantKernel(constant_value=1.0, constant_value_bounds="fixed")
         cos_kernel = constant_kernel * cosine_kernel
         self.regressor = GaussianProcessRegressor(
+            kernel=cos_kernel, n_restarts_optimizer=2,
+            alpha=0.001, normalize_y=False
             # kernel=RBF(length_scale=1e-3, length_scale_bounds=(1e-10, 1e1)),
-            kernel=cos_kernel,
-            n_restarts_optimizer=2,
-            normalize_y=True,
+            # kernel=cos_kernel,
+            # n_restarts_optimizer=2,
+            # normalize_y=True,
         )
 
 
     def _predict(self, X):
         if(len(X) == 0):
             raise ValueError("X is empty")
-        # embedding=self._query_cache(X)
-        embedding = np.array(self._embedding.embed_documents(X, 250))
+        embedding=self._query_cache(X)
+        # embedding = np.array(self._embedding.embed_documents(X, 250))
         results = []
         means, stds = self.regressor.predict(embedding, return_std=True)
         results = [GaussDist(mean, std) for mean, std in zip(means, stds)]
         return results, 0
 
     def _train(self, X, y):
-        # embedding=self._query_cache(X)
-        embedding = np.array(self._embedding.embed_documents(X, 250))
+        embedding=self._query_cache(X)
+        # embedding = np.array(self._embedding.embed_documents(X, 250))
         self.regressor.fit(embedding, list(map(float, y)))
 
 
