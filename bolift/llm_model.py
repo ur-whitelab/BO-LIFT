@@ -62,6 +62,9 @@ class GaussDist:
     def std(self):
         return self._std
 
+    def set_std(self, value):
+        self._std = value
+
     def __repr__(self):
         return f"GaussDist({self._mean}, {self._std})"
 
@@ -136,7 +139,8 @@ def parse_response(generation, prompt, llm):
     ]
     probs = np.exp(np.array([v for k, v in result]))
     probs = probs / np.sum(probs)
-    return DiscreteDist(np.array([k for k, v in result]), probs)
+    # return DiscreteDist(np.array([k for k, v in result]), probs)
+    return make_dd(np.array([k for k, v in result]), probs)
 
 
 def truncate(s):
@@ -174,7 +178,8 @@ def parse_response_topk(generations):
 
     probs = np.exp(np.array(logprobs))
     probs = probs / np.sum(probs)
-    return DiscreteDist(np.array(values), probs)
+    # return DiscreteDist(np.array(values), probs)
+    return make_dd(np.array(values), probs)
 
 
 def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):

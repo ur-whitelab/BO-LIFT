@@ -60,7 +60,7 @@ class AskTellFinetuning(AskTellFewShotTopk):
             
     def upload_data(self, data):
         f = openai.File.create(
-          file=open(data, "rb"),
+          file=open(data, "r"),
           purpose='fine-tune',
           user_provided_filename="FTimplementation.jsonl"
         )
