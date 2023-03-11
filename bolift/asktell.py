@@ -1,7 +1,13 @@
 import numpy as np
 from functools import partial
 from typing import *
-from .llm_model import get_llm, openai_choice_predict, openai_topk_predict, DiscreteDist, GaussDist
+from .llm_model import (
+    get_llm,
+    openai_choice_predict,
+    openai_topk_predict,
+    DiscreteDist,
+    GaussDist,
+)
 from .aqfxns import (
     probability_of_improvement,
     expected_improvement,
@@ -266,14 +272,14 @@ class AskTellFewShotMulti:
 
         # need to replace any GaussDist with pop std
         for i, result in enumerate(results):
-            if self._example_count > 1:
+            if len(self._ys) > 1:
                 ystd = np.std(self._ys)
-            elif self._example_count == 1:
+            elif len(self._ys) == 1:
                 ystd = self._ys[0]
             else:
                 ystd = 10
             if isinstance(result, GaussDist):
-                results[i].std = ystd
+                results[i].set_std(ystd)
 
         # compute mean and standard deviation
         if len(x) == 1:
