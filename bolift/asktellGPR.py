@@ -86,12 +86,10 @@ class AskTellGPR(AskTellFewShotTopk):
         constant_kernel = ConstantKernel(constant_value=1.0, constant_value_bounds="fixed")
         cos_kernel = constant_kernel * cosine_kernel
         self.regressor = GaussianProcessRegressor(
-            kernel=cos_kernel, n_restarts_optimizer=2,
-            alpha=0.001, normalize_y=False
-            # kernel=RBF(length_scale=1e-3, length_scale_bounds=(1e-10, 1e1)),
+            kernel=RBF(length_scale=1e-3, length_scale_bounds=(1e-10, 1e1)),
             # kernel=cos_kernel,
-            # n_restarts_optimizer=2,
-            # normalize_y=True,
+            n_restarts_optimizer=2,
+            normalize_y=True,
         )
 
 
