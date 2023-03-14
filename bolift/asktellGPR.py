@@ -98,16 +98,16 @@ class AskTellGPR(AskTellFewShotTopk):
     def _predict(self, X):
         if(len(X) == 0):
             raise ValueError("X is empty")
-        embedding=self._query_cache(X)
-        # embedding = np.array(self._embedding.embed_documents(X, 250))
+        # embedding=self._query_cache(X)
+        embedding = np.array(self._embedding.embed_documents(X, 250))
         results = []
         means, stds = self.regressor.predict(embedding, return_std=True)
         results = [GaussDist(mean, std) for mean, std in zip(means, stds)]
         return results, 0
 
     def _train(self, X, y):
-        embedding=self._query_cache(X)
-        # embedding = np.array(self._embedding.embed_documents(X, 250))
+        # embedding=self._query_cache(X)
+        embedding = np.array(self._embedding.embed_documents(X, 250))
         self.regressor.fit(embedding, list(map(float, y)))
 
 
