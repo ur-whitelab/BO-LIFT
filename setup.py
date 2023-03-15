@@ -24,9 +24,12 @@ setup(
         "scipy",
         "pandas",
         "scikit-learn",
+<<<<<<< HEAD
         "torch",
         "botorch",
         "gpytorch",
+=======
+>>>>>>> 95a5327 (Added pandas dependency)
     ],
     test_suite="tests",
     long_description=long_description,
