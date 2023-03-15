@@ -1,10 +1,28 @@
 import numpy as np
 import re
 from langchain.llms import OpenAI
+from langchain.chat_models import ChatOpenAI
 from langchain.callbacks import get_openai_callback
 from langchain.cache import InMemoryCache
 import langchain
 from dataclasses import dataclass
+
+from langchain import PromptTemplate, LLMChain
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
+
+
+def wrap_chatllm(query_list, llm):
+    if type(llm) == ChatOpenAI:
+        system_message_prompt = SystemMessage(
+            content="You are a bot that can predict chemical and material properties. Do not explain answers, just provide numerical predictions."
+        )
+        if type(query_list) == str:
+            query_list = [system_message_prompt, HumanMessage(content=query_list)]
+        else:
+            query_list = [
+                [system_message_prompt, HumanMessage(content=q)] for q in query_list
+            ]
+    return query_list
 
 
 @dataclass
@@ -18,13 +36,12 @@ class DiscreteDist:
         self.probs = np.array(self.probs)
         uniq_values = np.unique(self.values)
         if len(uniq_values) < len(self.values):
-            # need to merge
+            # need to mergefg
             uniq_probs = np.zeros(len(uniq_values))
             for i, v in enumerate(uniq_values):
                 uniq_probs[i] = np.sum(self.probs[self.values == v])
             self.values = uniq_values
             self.probs = uniq_probs
-
 
     def sample(self):
         return np.random.choice(self.values, p=self.probs)
@@ -71,11 +88,13 @@ class GaussDist:
     def __len__(self):
         return 1
 
+
 def make_dd(values, probs):
-    dd =  DiscreteDist(values, probs)
+    dd = DiscreteDist(values, probs)
     if len(dd) == 1:
         return GaussDist(dd.mean(), None)
     return dd
+
 
 langchain.llm_cache = InMemoryCache()
 
@@ -89,6 +108,18 @@ def get_llm(
     max_tokens=128,
     **kwargs,
 ):
+    if model_name in ["gpt-4", "gpt-3.5-turbo"]:
+        if "logprobs" in kwargs:
+            # not supported
+            del kwargs["logprobs"]
+        return ChatOpenAI(
+            model_name=model_name,
+            temperature=temperature,
+            n=n,
+            model_kwargs=kwargs,
+            max_tokens=max_tokens,
+        )
+
     return OpenAI(
         model_name=model_name,
         temperature=temperature,
@@ -182,6 +213,20 @@ def parse_response_topk(generations):
     return make_dd(np.array(values), probs)
 
 
+def parse_response_n(generations):
+    values = []
+    for gen in generations:
+        try:
+            v = float(truncate(gen.text))
+            values.append(v)
+        except ValueError:
+            continue
+
+    probs = [1 / len(values) for _ in values]
+    # return DiscreteDist(np.array(values), probs)
+    return make_dd(np.array(values), probs)
+
+
 def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
     """Predict the output numbers for a given list of queries"""
     with get_openai_callback() as cb:
@@ -201,6 +246,7 @@ def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
 
 def openai_topk_predict(query_list, llm, verbose, *args, **kwargs):
     """Predict the output numbers for a given list of queries"""
+    query_list = wrap_chatllm(query_list, llm)
     with get_openai_callback() as cb:
         completion_response = llm.generate(query_list, *args, **kwargs)
         token_usage = cb.total_tokens
@@ -212,5 +258,8 @@ def openai_topk_predict(query_list, llm, verbose, *args, **kwargs):
         print("-" * 80)
     results = []
     for gens in completion_response.generations:
-        results.append(parse_response_topk(gens))
+        if type(llm) == ChatOpenAI:
+            results.append(parse_response_n(gens))
+        else:
+            results.append(parse_response_topk(gens))
     return results, token_usage

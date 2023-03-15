@@ -7,6 +7,7 @@ from .llm_model import (
     openai_topk_predict,
     DiscreteDist,
     GaussDist,
+    wrap_chatllm,
 )
 from .aqfxns import (
     probability_of_improvement,
@@ -34,7 +35,8 @@ class AskTellFewShotMulti:
         prefix: Optional[str] = None,
         x_formatter: Callable[[str], str] = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
-        y_name: str = "y",
+        y_name: str = "output",
+        x_name: str = "input",
         selector_k: Optional[int] = None,
         k: int = 5,
         verbose: bool = False,
@@ -53,6 +55,7 @@ class AskTellFewShotMulti:
             x_formatter: Function to format x for prompting.
             y_formatter: Function to format y for prompting.
             y_name: Name of y variable in prompt template (e.g., density, value of function, etc.)
+            x_name: Name of x variable in prompt template (e.g., input, x, etc.). Only appears in inverse prompt
             selector_k: What k to use when switching to selection mode. If None, will use all examples
             k: Number of examples to use for each prediction.
             verbose: Whether to print out debug information.
@@ -63,6 +66,7 @@ class AskTellFewShotMulti:
         self.format_x = x_formatter
         self.format_y = y_formatter
         self._y_name = y_name
+        self._x_name = x_name
         self._prompt_template = prompt_template
         self._suffix = suffix
         self._prefix = prefix
@@ -84,10 +88,23 @@ class AskTellFewShotMulti:
             temperature=0.05 if temperature is None else temperature,
         )
 
+    def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
+        return get_llm(
+            model_name=model,
+            # put stop with suffix, so it doesn't start babbling
+            stop=[
+                self.prompt.suffix.split()[0],
+                self.inv_prompt.suffix.split()[0],
+                "\n",
+            ],
+            max_tokens=256,
+            temperature=0.05 if temperature is None else temperature,
+        )
+
     def _setup_inverse_prompt(self, example: Dict):
         prompt_template = PromptTemplate(
-            input_variables=["x", "y", "y_name"],
-            template="If {y_name} is {y}, then {x}\n\n",
+            input_variables=["x", "y", "y_name", "x_name"],
+            template="If {y_name} is {y}, then {x_name} is {x}\n\n",
         )
         if example is not None:
             prompt_template.format(**example)
@@ -111,8 +128,8 @@ class AskTellFewShotMulti:
             examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
             example_selector=example_selector,
-            suffix="If {y_name} is {y}, then",
-            input_variables=["y", "y_name"],
+            suffix="If {y_name} is {y}, then {x_name} is ",
+            input_variables=["y", "y_name", "x_name"],
         )
 
     def _setup_prompt(
@@ -199,7 +216,12 @@ class AskTellFewShotMulti:
             else:
                 example_dict[a] = alt_ys.pop()
         self._ys.append(y)
-        inv_example = dict(x=self.format_x(x), y_name=self._y_name, y=self.format_y(y))
+        inv_example = dict(
+            x=self.format_x(x),
+            y_name=self._y_name,
+            y=self.format_y(y),
+            x_name=self._x_name,
+        )
         return example_dict, inv_example
 
     def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
@@ -213,6 +235,7 @@ class AskTellFewShotMulti:
             )
             self.inv_prompt = self._setup_inverse_prompt(inv_example)
             self.llm = self._setup_llm(self._model, self._temperature)
+            self.inv_llm = self._setup_inv_llm(self._model, self._temperature)
             self._ready = True
         else:
             # in else, so we don't add twice
@@ -233,8 +256,11 @@ class AskTellFewShotMulti:
             raise ValueError(
                 "Must tell at least one example before inverse predicting."
             )
-        query = self.inv_prompt.format(y=self.format_y(y), y_name=self._y_name)
-        return self.llm(query)
+        query = self.inv_prompt.format(
+            y=self.format_y(y), y_name=self._y_name, x_name=self._x_name
+        )
+        query = wrap_chatllm(query, self.inv_llm)
+        return self.inv_llm(query).content
 
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
@@ -377,14 +403,14 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
             best_of=self._k,
             temperature=0.1 if temperature is None else temperature,
             model_name=model,
-            top_p=0.95,
+            top_p=1.0,
             stop=["\n", "###", "#", "##"],
             logit_bias={
                 "198": -100,  # new line,
                 "628": -100,  # double new line,
                 "50256": -100,  # endoftext
             },
-            max_tokens=32,
+            max_tokens=256,
             logprobs=1,
         )
 
@@ -454,5 +480,6 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
             x=self.format_x(x),
             y=self.format_y(y),
             y_name=self._y_name,
+            x_name=self._x_name,
         )
         return example_dict, inv_dict
