@@ -5,6 +5,8 @@ from .asktell import AskTellFewShotTopk
 from .llm_model import GaussDist
 
 from typing import *
+from sklearn.manifold import Isomap
+from sklearn.gaussian_process.kernels import Matern
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel, PairwiseKernel, RBF
 from langchain.embeddings import OpenAIEmbeddings
@@ -24,17 +26,29 @@ def cosine_similarity(X, Y=None, dense_output=True, gamma=None):
 
 
 class AskTellGPR(AskTellFewShotTopk):
-    def __init__(self, cache_path=None, **kwargs):
+    def __init__(self, 
+                n_components=64,
+                pool=None,
+                cache_path=None,
+                regressor_kernel=RBF(length_scale=1e-3, length_scale_bounds=(1e-10, 1e1)),
+                regressor_n_restarts_optimizer=2,
+                regressor_normalize_y=True,
+                **kwargs):
         super().__init__(**kwargs)
-        # self._selector_k = 0
-        self._set_regressor()
+        self._set_regressor(kernel=regressor_kernel, n_restarts_optimizer=regressor_n_restarts_optimizer, normalize_y=regressor_normalize_y)
         self.examples = []
         self._embedding = OpenAIEmbeddings()
         self._embeddings_cache = self._get_cache(cache_path)
-        # self._embeddings_cache = pd.DataFrame({'x':[], 'embedding':[]})
-        # self._embeddings_cache = {}
+        self.isomap = Isomap(n_components=n_components)
+        self.pool = pool
+        if self.pool is not None:
+            self._initialize_isomap()
 
     # I need to get the query from a persisted file
+
+    def _initialize_isomap(self):
+        pool_embeddings = self._query_cache(self.pool._available)
+        self.isomap.fit(pool_embeddings)
 
     def _get_cache(self, cache_path=None):
         try:
@@ -87,33 +101,37 @@ class AskTellGPR(AskTellFewShotTopk):
 
         return embedding
 
-    def _set_regressor(self):
+    def _set_regressor(self, kernel, n_restarts_optimizer, normalize_y):
         cosine_kernel = PairwiseKernel(metric=cosine_similarity)
         constant_kernel = ConstantKernel(
             constant_value=1.0, constant_value_bounds="fixed"
         )
         cos_kernel = constant_kernel * cosine_kernel
         self.regressor = GaussianProcessRegressor(
-            kernel=RBF(length_scale=1e-3, length_scale_bounds=(1e-10, 1e1)),
+            # kernel=RBF(length_scale=1e-3, length_scale_bounds=(1e-10, 1e1)),
             # kernel=cos_kernel,
-            n_restarts_optimizer=2,
-            normalize_y=True,
+            kernel=kernel,
+            n_restarts_optimizer=n_restarts_optimizer,
+            normalize_y=normalize_y,
         )
 
     def _predict(self, X):
         if len(X) == 0:
             raise ValueError("X is empty")
         embedding = self._query_cache(X)
-        # embedding = np.array(self._embedding.embed_documents(X, 250))
+        embedding_isomap = self.isomap.transform(embedding)
         results = []
-        means, stds = self.regressor.predict(embedding, return_std=True)
+        means, stds = self.regressor.predict(embedding_isomap, return_std=True)
         results = [GaussDist(mean, std) for mean, std in zip(means, stds)]
         return results, 0
 
     def _train(self, X, y):
         embedding = self._query_cache(X)
-        # embedding = np.array(self._embedding.embed_documents(X, 250))
-        self.regressor.fit(embedding, list(map(float, y)))
+        if self.pool is None:
+            embedding_isomap = self.isomap.fit_transform(embedding)
+        else:
+            embedding_isomap = self.isomap.transform(embedding)
+        self.regressor.fit(embedding_isomap, list(map(float, y)))
 
     def ask(
         self,
