@@ -260,7 +260,10 @@ class AskTellFewShotMulti:
             y=self.format_y(y), y_name=self._y_name, x_name=self._x_name
         )
         query = wrap_chatllm(query, self.inv_llm)
-        return self.inv_llm(query).content
+        x = self.inv_llm(query)
+        if type(x) != str:
+            return x.content
+        return x
 
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
