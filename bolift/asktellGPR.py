@@ -116,7 +116,7 @@ class AskTellGPR(AskTellFewShotTopk):
         # just have this here to override default
         return super().ask(possible_x, aq_fxn, k, 0, _lambda)
 
-    def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
+    def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None, train=True) -> None:
         """Tell the optimizer about a new example."""
         example_dict, inv_example = self._tell(x, y, alt_ys)
         # we want to have example
@@ -132,16 +132,17 @@ class AskTellGPR(AskTellFewShotTopk):
 
         self.examples.append(example_dict)
 
-        self._train(
-            [
-                self.prompt.format(
-                    x=ex["x"],
-                    y_name=self._y_name,
-                )
-                for ex in self.examples
-            ],
-            [ex["y"] for ex in self.examples],
-        )
+        if train:
+            self._train(
+                [
+                    self.prompt.format(
+                        x=ex["x"],
+                        y_name=self._y_name,
+                    )
+                    for ex in self.examples
+                ],
+                [ex["y"] for ex in self.examples],
+            )
 
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
