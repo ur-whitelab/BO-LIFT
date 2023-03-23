@@ -24,6 +24,9 @@ setup(
         "scipy",
         "pandas",
         "scikit-learn",
+        "torch",
+        "botorch",
+        "gpytorch",
     ],
     test_suite="tests",
     long_description=long_description,
@@ -34,4 +37,4 @@ setup(
         "Operating System :: OS Independent",
     ],
 )
-1
+

@@ -301,6 +301,7 @@ def test_gpr():
         y_formatter=lambda y: str(int(y)),
     )
     for i in range(5):
-        asktell.tell(i, 2 + i)
+        asktell.tell(i, 2 + i, train=False)
+    asktell.tell(5, 7, train=True)
     asktell.predict(5000)
     assert asktell.ask([2, 8])[0][0] == 8
