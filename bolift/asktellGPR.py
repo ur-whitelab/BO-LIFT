@@ -5,36 +5,31 @@ from .asktell import AskTellFewShotTopk
 from .llm_model import GaussDist
 
 from typing import *
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import ConstantKernel, PairwiseKernel, RBF
+from sklearn.manifold import Isomap
+from botorch.models.gp_regression import FixedNoiseGP, SingleTaskGP
+from gpytorch.likelihoods import GaussianLikelihood
+from gpytorch.mlls import ExactMarginalLogLikelihood
+from botorch.optim import optimize_acqf
+from botorch.optim.fit import fit_gpytorch_torch
+from sklearn.manifold import Isomap
+import torch
 from langchain.embeddings import OpenAIEmbeddings
 
-
-def cosine_similarity(X, Y=None, dense_output=True, gamma=None):
-    if Y is None:
-        Y = X
-    X = X.reshape(1, -1)
-    Y = Y.reshape(1, -1)
-    dot = np.dot(X, Y.T)
-    norms_X = np.linalg.norm(X, axis=1).reshape(-1, 1)
-    norms_Y = np.linalg.norm(Y, axis=1).reshape(1, -1)
-    norms = norms_X * norms_Y
-    sim = dot / norms
-    return sim if dense_output else np.diag(sim)
-
-
 class AskTellGPR(AskTellFewShotTopk):
-    def __init__(self, cache_path=None, **kwargs):
-        super().__init__(**kwargs)
-        # self._selector_k = 0
-        self._set_regressor()
-        self.examples = []
-        self._embedding = OpenAIEmbeddings()
-        self._embeddings_cache = self._get_cache(cache_path)
-        # self._embeddings_cache = pd.DataFrame({'x':[], 'embedding':[]})
-        # self._embeddings_cache = {}
+    def __init__(self, n_components=2, pool=None, cache_path=None, **kwargs):
+            super().__init__(**kwargs)
+            self._set_regressor()
+            self.examples = []
+            self._embedding = OpenAIEmbeddings()
+            self._embeddings_cache = self._get_cache(cache_path)
+            self.isomap = Isomap(n_components=n_components)
+            self.pool = pool
+            if self.pool is not None:
+                self._initialize_isomap()
 
-    # I need to get the query from a persisted file
+    def _initialize_isomap(self):
+        pool_embeddings = self._query_cache(self.pool._available)
+        self.isomap.fit(pool_embeddings)
 
     def _get_cache(self, cache_path=None):
         try:
@@ -68,12 +63,6 @@ class AskTellGPR(AskTellFewShotTopk):
             ].to_list()[0]
             for xi in X
         ]
-        # self._embeddings_cache = {**self._embeddings_cache, **dict(zip(not_in_cache, new_embeddings))}
-        # print('update cache', ti-time.time())
-        # embedding = [
-        #     self._embeddings_cache[xi]
-        #     for xi in X
-        # ]
 
         if len(embedding) != len(X):
             raise ValueError(
@@ -82,38 +71,39 @@ class AskTellGPR(AskTellFewShotTopk):
                     "Something went wrong on caching."
                 )
             )
-            # print(self._embeddings_cache[self._embeddings_cache['x'].isin(X)])
-            # print(X)
 
         return embedding
 
     def _set_regressor(self):
-        cosine_kernel = PairwiseKernel(metric=cosine_similarity)
-        constant_kernel = ConstantKernel(
-            constant_value=1.0, constant_value_bounds="fixed"
-        )
-        cos_kernel = constant_kernel * cosine_kernel
-        self.regressor = GaussianProcessRegressor(
-            kernel=RBF(length_scale=1e-3, length_scale_bounds=(1e-10, 1e1)),
-            # kernel=cos_kernel,
-            n_restarts_optimizer=2,
-            normalize_y=True,
-        )
+        self.likelihood = GaussianLikelihood()
+        self.regressor = None
 
     def _predict(self, X):
         if len(X) == 0:
             raise ValueError("X is empty")
         embedding = self._query_cache(X)
-        # embedding = np.array(self._embedding.embed_documents(X, 250))
+        embedding_isomap = self.isomap.transform(embedding)
         results = []
-        means, stds = self.regressor.predict(embedding, return_std=True)
-        results = [GaussDist(mean, std) for mean, std in zip(means, stds)]
+        with torch.no_grad():
+            self.regressor.eval()
+            self.likelihood.eval()
+            means = self.likelihood(self.regressor(torch.tensor(embedding_isomap))).mean
+            stds = self.likelihood(self.regressor(torch.tensor(embedding_isomap))).variance.sqrt()
+        results = [GaussDist(mean.item(), std.item()) for mean, std in zip(means, stds)]
         return results, 0
 
     def _train(self, X, y):
         embedding = self._query_cache(X)
-        # embedding = np.array(self._embedding.embed_documents(X, 250))
-        self.regressor.fit(embedding, list(map(float, y)))
+        embedding = np.array(embedding)
+        if self.pool is None:
+            embedding_isomap = self.isomap.fit_transform(embedding)
+        else:
+            embedding_isomap = self.isomap.transform(embedding)
+        train_x = torch.tensor(embedding_isomap)
+        train_y = torch.tensor(list(map(float, y))).unsqueeze(-1).double()
+        self.regressor = SingleTaskGP(train_x, train_y)
+        mll = ExactMarginalLogLikelihood(self.regressor.likelihood, self.regressor)
+        fit_gpytorch_torch(mll)
 
     def ask(
         self,
@@ -126,7 +116,7 @@ class AskTellGPR(AskTellFewShotTopk):
         # just have this here to override default
         return super().ask(possible_x, aq_fxn, k, 0, _lambda)
 
-    def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
+    def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None, train=True) -> None:
         """Tell the optimizer about a new example."""
         example_dict, inv_example = self._tell(x, y, alt_ys)
         # we want to have example
@@ -142,16 +132,17 @@ class AskTellGPR(AskTellFewShotTopk):
 
         self.examples.append(example_dict)
 
-        self._train(
-            [
-                self.prompt.format(
-                    x=ex["x"],
-                    y_name=self._y_name,
-                )
-                for ex in self.examples
-            ],
-            [ex["y"] for ex in self.examples],
-        )
+        if train:
+            self._train(
+                [
+                    self.prompt.format(
+                        x=ex["x"],
+                        y_name=self._y_name,
+                    )
+                    for ex in self.examples
+                ],
+                [ex["y"] for ex in self.examples],
+            )
 
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
