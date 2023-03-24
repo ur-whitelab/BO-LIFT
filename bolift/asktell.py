@@ -18,9 +18,11 @@ from .aqfxns import (
 from .pool import Pool
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
-from langchain.vectorstores import FAISS
+from langchain.vectorstores import FAISS, Chroma
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.prompts.example_selector import MaxMarginalRelevanceExampleSelector
+from langchain.prompts.example_selector import MaxMarginalRelevanceExampleSelector, SemanticSimilarityExampleSelector 
+
+
 
 _answer_choices = ["A", "B", "C", "D", "E"]
 
@@ -40,6 +42,7 @@ class AskTellFewShotMulti:
         selector_k: Optional[int] = None,
         k: int = 5,
         verbose: bool = False,
+        cos_sim: bool = False,
     ) -> None:
         """Initialize Ask-Tell optimizer.
 
@@ -77,6 +80,7 @@ class AskTellFewShotMulti:
         self._answer_choices = _answer_choices[:k]
         self._verbose = verbose
         self.tokens_used = 0
+        self.cos_sim = cos_sim
 
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         return get_llm(
@@ -116,14 +120,26 @@ class AskTellFewShotMulti:
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            example_selector = (
-                example_selector
-            ) = MaxMarginalRelevanceExampleSelector.from_examples(
-                [example],
-                OpenAIEmbeddings(),
-                FAISS,
-                k=self._selector_k,
-            )
+
+            if not self.cos_sim:
+                example_selector = (
+                    example_selector
+                ) = MaxMarginalRelevanceExampleSelector.from_examples(
+                    [example],
+                    OpenAIEmbeddings(),
+                    FAISS,
+                    k=self._selector_k,
+                )
+            else:
+                example_selector = (
+                    example_selector
+                ) = SemanticSimilarityExampleSelector.from_examples(
+                    [example],
+                    OpenAIEmbeddings(),
+                    Chroma,
+                    k=self._selector_k,
+                )
+
         return FewShotPromptTemplate(
             examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
@@ -166,14 +182,25 @@ class AskTellFewShotMulti:
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            example_selector = (
-                example_selector
-            ) = MaxMarginalRelevanceExampleSelector.from_examples(
-                [example],
-                OpenAIEmbeddings(),
-                FAISS,
-                k=self._selector_k,
-            )
+            if not self.cos_sim:
+                example_selector = (
+                    example_selector
+                ) = MaxMarginalRelevanceExampleSelector.from_examples(
+                    [example],
+                    OpenAIEmbeddings(),
+                    FAISS,
+                    k=self._selector_k,
+                )
+            else:
+                example_selector = (
+                    example_selector
+                ) = SemanticSimilarityExampleSelector.from_examples(
+                    [example],
+                    OpenAIEmbeddings(),
+                    Chroma,
+                    k=self._selector_k,
+                )
+
         return FewShotPromptTemplate(
             examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
@@ -449,14 +476,26 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            example_selector = (
-                example_selector
-            ) = MaxMarginalRelevanceExampleSelector.from_examples(
-                [example],
-                OpenAIEmbeddings(),
-                FAISS,
-                k=self._selector_k,
-            )
+
+            if not self.cos_sim:
+                example_selector = (
+                    example_selector
+                ) = MaxMarginalRelevanceExampleSelector.from_examples(
+                    [example],
+                    OpenAIEmbeddings(),
+                    FAISS,
+                    k=self._selector_k,
+                )
+            else:
+                example_selector = (
+                    example_selector
+                ) = SemanticSimilarityExampleSelector.from_examples(
+                    [example],
+                    OpenAIEmbeddings(),
+                    Chroma,
+                    k=self._selector_k,
+                )
+
         return FewShotPromptTemplate(
             examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
