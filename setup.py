@@ -27,6 +27,7 @@ setup(
         "torch",
         "botorch",
         "gpytorch",
+        "chromadb",
     ],
     test_suite="tests",
     long_description=long_description,
