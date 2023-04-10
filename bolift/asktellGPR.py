@@ -45,7 +45,6 @@ class AskTellGPR(AskTellFewShotTopk):
 
     def _query_cache(self, X):
         in_cache = self._embeddings_cache["x"].to_list()
-        # in_cache = self._embeddings_cache.keys()
         not_in_cache = np.setdiff1d(X, in_cache)
         new_embeddings = []
         if not_in_cache.size > 0:
