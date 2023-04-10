@@ -2,6 +2,7 @@ import numpy as np
 from .asktellGPR import AskTellGPR
 from .llm_model import GaussDist
 
+
 class AskTellRidgeKernelRegression(AskTellGPR):
     def __init__(self, alpha=1, **kwargs):
         super().__init__(**kwargs)
@@ -21,7 +22,9 @@ class AskTellRidgeKernelRegression(AskTellGPR):
 
     def _normalize(self, X, mean, std):
         if mean is None or std is None:
-            raise ValueError("Mean and standard deviation must be set for normalization")
+            raise ValueError(
+                "Mean and standard deviation must be set for normalization"
+            )
         return (X - mean) / std
 
     def _train(self, X, y):
@@ -54,6 +57,6 @@ class AskTellRidgeKernelRegression(AskTellGPR):
         embedding = self._normalize(embedding, self.mean_x, self.std_x)
 
         kernel_test = self._dot_product_kernel(embedding, self.train_x)
-        mean = np.dot(kernel_test, self.coefficients)*self.std_y + self.mean_y
+        mean = np.dot(kernel_test, self.coefficients) * self.std_y + self.mean_y
         results = [GaussDist(m, s) for m, s in zip(mean, np.zeros_like(mean))]
         return results, 0

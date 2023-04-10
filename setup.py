@@ -1,5 +1,3 @@
-import os
-from glob import glob
 from setuptools import setup
 
 exec(open("bolift/version.py").read())
@@ -16,19 +14,8 @@ setup(
     url="https://github.com/whitead/bolift",
     license="MIT",
     packages=["bolift"],
-    install_requires=[
-        "numpy",
-        "langchain",
-        "openai",
-        "faiss-cpu",
-        "scipy",
-        "pandas",
-        "scikit-learn",
-        "torch",
-        "botorch",
-        "gpytorch",
-        "chromadb",
-    ],
+    install_requires=["numpy", "langchain", "openai", "faiss-cpu", "scipy", "pandas"],
+    extras_require={"gpr": ["scikit-learn", "torch", "botorch", "gpytorch"]},
     test_suite="tests",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -38,4 +25,3 @@ setup(
         "Operating System :: OS Independent",
     ],
 )
-
