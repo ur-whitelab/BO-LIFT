@@ -1,6 +1,5 @@
 import os
 import openai
-import numpy as np
 import pandas as pd
 import time
 import json
@@ -8,7 +7,6 @@ import json
 from typing import *
 from .asktell import AskTellFewShotTopk
 from langchain.prompts.prompt import PromptTemplate
-from langchain.prompts.few_shot import FewShotPromptTemplate
 
 
 class AskTellFinetuning(AskTellFewShotTopk):
@@ -32,17 +30,17 @@ class AskTellFinetuning(AskTellFewShotTopk):
         examples: List[Tuple[str, float]] = [],
     ) -> None:
         super().__init__(
-            prompt_template,
-            suffix,
-            model,
-            temperature,
-            prefix,
-            x_formatter,
-            y_formatter,
-            y_name,
-            selector_k,
-            k,
-            verbose,
+            prompt_template=prompt_template,
+            suffix=suffix,
+            model=model,
+            temperature=temperature,
+            prefix=prefix,
+            x_formatter=x_formatter,
+            y_formatter=y_formatter,
+            y_name=y_name,
+            selector_k=selector_k,
+            k=k,
+            verbose=verbose,
         )
         self.n_epochs = n_epochs
         self.learning_rate_multiplier = learning_rate_multiplier

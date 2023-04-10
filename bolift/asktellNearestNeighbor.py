@@ -1,9 +1,4 @@
-import os
-import openai
 import numpy as np
-import pandas as pd
-import time
-import json
 
 from typing import *
 from .asktell import AskTellFewShotTopk
@@ -19,7 +14,7 @@ class AskTellNearestNeighbor(AskTellFewShotTopk):
     def __init__(self, knn=1, **kwargs):
         super().__init__(selector_k=knn, **kwargs)
         self.knn = knn
-    
+
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
         """Tell the optimizer about a new example."""
         if alt_ys is not None:
@@ -31,7 +26,7 @@ class AskTellNearestNeighbor(AskTellFewShotTopk):
         )
         self._ys.append(y)
         return example_dict
-    
+
     def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
         """Tell the optimizer about a new example."""
         example_dict = self._tell(x, y, alt_ys)
@@ -55,7 +50,7 @@ class AskTellNearestNeighbor(AskTellFewShotTopk):
         prompt_template: Optional[PromptTemplate] = None,
         suffix: Optional[str] = None,
         prefix: Optional[str] = None,
-        ) -> FewShotPromptTemplate:
+    ) -> FewShotPromptTemplate:
         if prefix is None:
             prefix = (
                 "The following are correctly answered questions. "
@@ -112,19 +107,12 @@ class AskTellNearestNeighbor(AskTellFewShotTopk):
             self.prompt.example_selector.k = min(self._example_count, self._selector_k)
 
         selected = [
-            self.prompt.example_selector.select_examples({'x': x_i})
-            for x_i in x
-            ]
-        
-        predictions = [
-            [float(s['y']) for s in selected_i]
-            for selected_i in selected
+            self.prompt.example_selector.select_examples({"x": x_i}) for x_i in x
         ]
-        
-        results = [
-            GaussDist(np.mean(p), np.std(p))
-            for p in predictions
-        ]
+
+        predictions = [[float(s["y"]) for s in selected_i] for selected_i in selected]
+
+        results = [GaussDist(np.mean(p), np.std(p)) for p in predictions]
 
         if len(x) == 1:
             return results[0]

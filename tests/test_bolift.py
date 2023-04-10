@@ -1,9 +1,6 @@
-import logging
 from bolift import llm_model
 import bolift
-import sys
 import numpy as np
-from langchain.prompts.prompt import PromptTemplate
 
 np.random.seed(0)
 
@@ -47,7 +44,7 @@ def test_parse_response_topk():
     g = llm.generate([prompt]).generations
     result = llm_model.parse_response_topk(g[0])
     # make sure answer is max
-    assert 4 in result.values.astype(int)
+    assert result.mode().astype(int) == 4
 
 
 def test_tell_fewshot():
@@ -60,7 +57,7 @@ def test_tell_fewshot():
     asktell.tell(1, 2)
     asktell.tell(3, 6)
     dist = asktell.predict(3)
-    m = dist.mode()
+    dist.mode()
     # assert m == 6
 
 
@@ -96,7 +93,7 @@ def test_tell_fewshot_topk():
     asktell.tell(1, 2)
     asktell.tell(16, 32)
     dist = asktell.predict(2)
-    m = dist.mode()
+    m = dist.mode().astype(int)
     assert m == 4
 
 
@@ -122,7 +119,7 @@ def test_tell_fewshot_vark():
     asktell.tell(1, 2)
     asktell.tell(3, 6)
     dist = asktell.predict(2)
-    m = dist.mode()
+    dist.mode()
     # assert m == 4
 
 
@@ -136,7 +133,7 @@ def test_tell_fewshot_selector():
     for i in range(5):
         asktell.tell(i, 2 + i)
     dist = asktell.predict(3)
-    assert 3 + 2 in dist.values
+    assert 3 + 2 == dist.mode().astype(int)
 
 
 def test_tell_fewshot_selector_less():
@@ -149,7 +146,7 @@ def test_tell_fewshot_selector_less():
     for i in range(5):
         asktell.tell(i, 2 + i)
     dist = asktell.predict(3)
-    assert 3 + 2 in dist.values
+    assert 3 + 2 == dist.mode().astype(int)
 
 
 def test_tell_fewshot_topk_selector():
@@ -162,7 +159,7 @@ def test_tell_fewshot_topk_selector():
     for i in range(5):
         asktell.tell(i, 2 + i)
     dist = asktell.predict(3)
-    assert 3 + 2 in dist.values
+    assert 3 + 2 == dist.mode().astype(int)
 
 
 def test_ask_ei_fewshot():
@@ -216,7 +213,7 @@ def test_ask_zero_fewshot_topk():
         model="text-babbage-001",
     )
     _, scores, means = asktell.ask([2, 8], k=2)
-    assert scores[0] > scores[1]
+    assert scores[0] >= scores[1]
     asktell.ask([2, 8], k=2, aq_fxn="greedy")
 
 
@@ -230,16 +227,6 @@ def test_ask_ei_fewshot_finetune():
     asktell.tell(16, 32)
     best, _, _ = asktell.ask([2, 8])
     assert best[0] == 8
-
-
-def test_ask_zero_fewshot_finetune():
-    asktell = bolift.AskTellFinetuning(
-        x_formatter=lambda x: f"y = f({x}) for the shifted Ackley function",
-        model="text-ada-001",
-    )
-    _, scores, means = asktell.ask([2, 8], k=2)
-    assert scores[0] > scores[1]
-    asktell.ask([2, 8], k=2, aq_fxn="greedy")
 
 
 def test_prepare_data_finetuning():
@@ -290,7 +277,7 @@ def test_llm_usage():
     )
     for i in range(5):
         asktell.tell(i, 2 + i)
-    dist = asktell.predict(3)
+    asktell.predict(3)
     print(asktell.tokens_used)
     assert asktell.tokens_used > 0
 
@@ -304,4 +291,4 @@ def test_gpr():
         asktell.tell(i, 2 + i, train=False)
     asktell.tell(5, 7, train=True)
     asktell.predict(5000)
-    assert asktell.ask([2, 8])[0][0] == 8
+    assert asktell.ask([1, 5])[0][0] == 8

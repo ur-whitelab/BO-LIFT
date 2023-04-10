@@ -24,6 +24,7 @@ from langchain.prompts.example_selector import MaxMarginalRelevanceExampleSelect
 
 _answer_choices = ["A", "B", "C", "D", "E"]
 
+
 class QuantileTransformer:
     def __init__(self, values, n_quantiles):
         self.n_quantiles = n_quantiles
@@ -35,8 +36,11 @@ class QuantileTransformer:
         return quantile_scores
 
     def to_values(self, quantile_scores):
-        values_from_scores = np.interp(quantile_scores, range(self.n_quantiles + 1), self.values_quantiles)
+        values_from_scores = np.interp(
+            quantile_scores, range(self.n_quantiles + 1), self.values_quantiles
+        )
         return values_from_scores
+
 
 class AskTellFewShotMulti:
     def __init__(
@@ -431,12 +435,14 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
         result, token_usage = openai_topk_predict(queries, self.llm, self._verbose)
         if self.use_quantiles and self.qt is None:
-            raise ValueError("Can't use quantiles without building the quantile transformer")
+            raise ValueError(
+                "Can't use quantiles without building the quantile transformer"
+            )
         if self.use_quantiles:
             for r in result:
                 if isinstance(r, GaussDist):
                     r._mean = self.qt.to_values(r._mean)
-                elif isinstance(r, DiscreteDist): 
+                elif isinstance(r, DiscreteDist):
                     r.values = self.qt.to_values(r.values)
         return result, token_usage
 
@@ -515,8 +521,7 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
 
         if self.use_quantiles:
             self.qt = QuantileTransformer(
-            values = self._ys + [y],
-            n_quantiles = self.n_quantiles
+                values=self._ys + [y], n_quantiles=self.n_quantiles
             )
             y = self.qt.to_quantiles(y)
 

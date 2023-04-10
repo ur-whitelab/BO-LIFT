@@ -5,27 +5,26 @@ from .asktell import AskTellFewShotTopk
 from .llm_model import GaussDist
 
 from typing import *
-from sklearn.manifold import Isomap
-from botorch.models.gp_regression import FixedNoiseGP, SingleTaskGP
+from botorch.models.gp_regression import SingleTaskGP
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from botorch.optim import optimize_acqf
 from botorch.optim.fit import fit_gpytorch_torch
-from sklearn.manifold import Isomap
 import torch
 from langchain.embeddings import OpenAIEmbeddings
+from sklearn.manifold import Isomap
+
 
 class AskTellGPR(AskTellFewShotTopk):
     def __init__(self, n_components=2, pool=None, cache_path=None, **kwargs):
-            super().__init__(**kwargs)
-            self._set_regressor()
-            self.examples = []
-            self._embedding = OpenAIEmbeddings()
-            self._embeddings_cache = self._get_cache(cache_path)
-            self.isomap = Isomap(n_components=n_components)
-            self.pool = pool
-            if self.pool is not None:
-                self._initialize_isomap()
+        super().__init__(**kwargs)
+        self._set_regressor()
+        self.examples = []
+        self._embedding = OpenAIEmbeddings()
+        self._embeddings_cache = self._get_cache(cache_path)
+        self.isomap = Isomap(n_components=n_components)
+        self.pool = pool
+        if self.pool is not None:
+            self._initialize_isomap()
 
     def _initialize_isomap(self):
         pool_embeddings = self._query_cache(self.pool._available)
@@ -87,7 +86,9 @@ class AskTellGPR(AskTellFewShotTopk):
             self.regressor.eval()
             self.likelihood.eval()
             means = self.likelihood(self.regressor(torch.tensor(embedding_isomap))).mean
-            stds = self.likelihood(self.regressor(torch.tensor(embedding_isomap))).variance.sqrt()
+            stds = self.likelihood(
+                self.regressor(torch.tensor(embedding_isomap))
+            ).variance.sqrt()
         results = [GaussDist(mean.item(), std.item()) for mean, std in zip(means, stds)]
         return results, 0
 
@@ -115,7 +116,9 @@ class AskTellGPR(AskTellFewShotTopk):
         # just have this here to override default
         return super().ask(possible_x, aq_fxn, k, 0, _lambda)
 
-    def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None, train=True) -> None:
+    def tell(
+        self, x: str, y: float, alt_ys: Optional[List[float]] = None, train=True
+    ) -> None:
         """Tell the optimizer about a new example."""
         example_dict, inv_example = self._tell(x, y, alt_ys)
         # we want to have example

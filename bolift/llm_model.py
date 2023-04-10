@@ -7,8 +7,7 @@ from langchain.cache import InMemoryCache
 import langchain
 from dataclasses import dataclass
 
-from langchain import PromptTemplate, LLMChain
-from langchain.schema import AIMessage, HumanMessage, SystemMessage
+from langchain.schema import HumanMessage, SystemMessage
 
 
 def wrap_chatllm(query_list, llm):
