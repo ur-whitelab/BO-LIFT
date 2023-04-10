@@ -14,7 +14,7 @@ setup(
     url="https://github.com/whitead/bolift",
     license="MIT",
     packages=["bolift"],
-    install_requires=["numpy", "langchain", "openai", "faiss-cpu", "scipy", "pandas"],
+    install_requires=["numpy", "langchain", "openai", "faiss-cpu", "scipy", "pandas", "tiktoken"],
     extras_require={"gpr": ["scikit-learn", "torch", "botorch", "gpytorch"]},
     test_suite="tests",
     long_description=long_description,
