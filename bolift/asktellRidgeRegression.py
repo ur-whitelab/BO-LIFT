@@ -55,7 +55,5 @@ class AskTellRidgeKernelRegression(AskTellGPR):
 
         kernel_test = self._dot_product_kernel(embedding, self.train_x)
         mean = np.dot(kernel_test, self.coefficients)*self.std_y + self.mean_y
-        # variance = np.var(self.train_y) * (1 - np.diag(self._dot_product_kernel(embedding, embedding)))
-        # std = np.sqrt(variance)
         results = [GaussDist(m, s) for m, s in zip(mean, np.zeros_like(mean))]
         return results, 0
