@@ -24,6 +24,19 @@ from langchain.prompts.example_selector import MaxMarginalRelevanceExampleSelect
 
 _answer_choices = ["A", "B", "C", "D", "E"]
 
+class QuantileTransformer:
+    def __init__(self, values, n_quantiles):
+        self.n_quantiles = n_quantiles
+        self.quantiles = np.linspace(0, 1, n_quantiles + 1)
+        self.values_quantiles = np.quantile(values, self.quantiles)
+
+    def to_quantiles(self, values):
+        quantile_scores = np.digitize(values, self.values_quantiles[1:-1])
+        return quantile_scores
+
+    def to_values(self, quantile_scores):
+        values_from_scores = np.interp(quantile_scores, range(self.n_quantiles + 1), self.values_quantiles)
+        return values_from_scores
 
 class AskTellFewShotMulti:
     def __init__(
@@ -39,6 +52,8 @@ class AskTellFewShotMulti:
         x_name: str = "input",
         selector_k: Optional[int] = None,
         k: int = 5,
+        use_quantiles: bool = False,
+        n_quantiles: int = 100,
         verbose: bool = False,
     ) -> None:
         """Initialize Ask-Tell optimizer.
@@ -75,6 +90,9 @@ class AskTellFewShotMulti:
         self._temperature = temperature
         self._k = k
         self._answer_choices = _answer_choices[:k]
+        self.use_quantiles = use_quantiles
+        self.n_quantiles = n_quantiles
+        self._calibration_factor = None
         self._verbose = verbose
         self.tokens_used = 0
 
@@ -95,7 +113,7 @@ class AskTellFewShotMulti:
             stop=[
                 self.prompt.suffix.split()[0],
                 self.inv_prompt.suffix.split()[0],
-                "\n",
+                # "\n",
             ],
             max_tokens=256,
             temperature=0.05 if temperature is None else temperature,
@@ -265,6 +283,9 @@ class AskTellFewShotMulti:
             return x.content
         return x
 
+    def set_calibration_factor(self, calibration_factor):
+        self._calibration_factor = calibration_factor
+
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
 
@@ -309,6 +330,16 @@ class AskTellFewShotMulti:
                 ystd = 10
             if isinstance(result, GaussDist):
                 results[i].set_std(ystd)
+
+        if self._calibration_factor:
+            for i, result in enumerate(results):
+                if isinstance(result, GaussDist):
+                    results[i].set_std(result.std() * self._calibration_factor)
+                elif isinstance(result, DiscreteDist):
+                    results[i] = GaussDist(
+                        results[i].mean(),
+                        results[i].std() * self._calibration_factor,
+                    )
 
         # compute mean and standard deviation
         if len(x) == 1:
@@ -365,8 +396,9 @@ class AskTellFewShotMulti:
             # not sure if this is too important,
             # but to get some diversity we
             # take last added y AND best
-            approx_x = self.inv_predict(best * 1.5)
+            approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
             possible_x_l = possible_x.approx_sample(approx_x, inv_filter)
+
         else:
             possible_x_l = list(possible_x)
         results = self._ask(possible_x_l, best, aq_fxn, k)
@@ -397,7 +429,16 @@ class AskTellFewShotMulti:
 
 class AskTellFewShotTopk(AskTellFewShotMulti):
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
-        return openai_topk_predict(queries, self.llm, self._verbose)
+        result, token_usage = openai_topk_predict(queries, self.llm, self._verbose)
+        if self.use_quantiles and self.qt is None:
+            raise ValueError("Can't use quantiles without building the quantile transformer")
+        if self.use_quantiles:
+            for r in result:
+                if isinstance(r, GaussDist):
+                    r._mean = self.qt.to_values(r._mean)
+                elif isinstance(r, DiscreteDist): 
+                    r.values = self.qt.to_values(r.values)
+        return result, token_usage
 
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         # nucleus sampling seems to get more diversity
@@ -471,6 +512,14 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
 
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
         """Tell the optimizer about a new example."""
+
+        if self.use_quantiles:
+            self.qt = QuantileTransformer(
+            values = self._ys + [y],
+            n_quantiles = self.n_quantiles
+            )
+            y = self.qt.to_quantiles(y)
+
         if alt_ys is not None:
             raise ValueError("Alt ys not supported for topk.")
         example_dict = dict(
