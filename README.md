@@ -17,7 +17,7 @@ Being able to predict uncertainty, allow the employment of interesting technique
 You need to set up your OpenAI API key in order to use BO-LIFT.
 You can do that using the `os` Python library:
 
-```
+```py
 import os
 os.environ["OPENAI_API_KEY"] = "<your-key-here>"
 ```
@@ -25,7 +25,7 @@ os.environ["OPENAI_API_KEY"] = "<your-key-here>"
 `bolift` provides different models depending on the prompt you want to use.
 One example of usage can be seen in the following:
 
-```
+```py
 import bolift
 asktell = bolift.AskTellFewShotTopk(
   ...args
@@ -33,7 +33,7 @@ asktell = bolift.AskTellFewShotTopk(
 ```
 Examples can be shown to the model by simply using the `tell` method:
 
-```
+```py
 for i in range(n):
   asktell.tell(<x_data>, <y_data>)
 ```
@@ -41,6 +41,6 @@ for i in range(n):
 `bolift` will use these points to create the prompt for a prediction.
 A prediction can be done using:
 
-```
+```py
 asktell.predict(<x_data>)
 ```
