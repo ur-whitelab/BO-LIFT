@@ -278,9 +278,7 @@ class AskTellFewShotMulti:
             y=self.format_y(y), y_name=self._y_name, x_name=self._x_name
         )
         query = wrap_chatllm(query, self.inv_llm)
-        # print(query)
         x = self.inv_llm(query)
-        # print(x)
         if type(x) != str:
             return x.content
         return x
