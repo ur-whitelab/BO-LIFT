@@ -291,4 +291,4 @@ def test_gpr():
         asktell.tell(i, 2 + i, train=False)
     asktell.tell(5, 7, train=True)
     asktell.predict(5000)
-    assert asktell.ask([1, 5])[0][0] == 8
+    assert asktell.ask([1, 5])[0][0] == 5
