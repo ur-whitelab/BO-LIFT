@@ -13,14 +13,20 @@ Being able to predict uncertainty, allow the employment of interesting technique
 
 ## Table of content
 -[BO-LIFT](#-bo-lift-bayesian-optimization-using-in-context-learning)
-  - [Install](#)
+  - [Install](#install-)
   - [Usage](#usage-)
-    - [Creating the model](#creating-the-model)
-    - [Making a prediction](#making-a-prediction)
-    - [Improving the model](#improving-the-model)
+    - [Quickstart](#quickstart-)
+    - [Customising the model](#customising-the-model)
     - [Inverse design](#inverse-design)
   - [Citation](#citation)
 
+## Install 📦
+
+bolift can simply be installed using pip:
+
+```bash
+pip install bolift
+```
 
 ## Usage 💻
 
@@ -32,7 +38,59 @@ import os
 os.environ["OPENAI_API_KEY"] = "<your-key-here>"
 ```
 
-### Creating the model
+### Quickstart 🔥
+
+`bolift` provides a simple interface to use the model.
+```py
+# Create the model object
+asktell = bolift.AskTellFewShotTopk()
+
+# Tell some points to the model
+asktell.tell("1-bromopropane", -1.730)
+asktell.tell("1-bromopentane", -3.080)
+asktell.tell("1-bromooctane", -5.060)
+asktell.tell("1-bromonaphthalene", -4.35)
+
+# Make a prediction
+yhat = asktell.predict("1-bromobutane")
+print(yhat.mean(), yhat.std())
+```
+This prediction returns $-2.92 \pm 1.27$.
+
+Further improvements can be done by using Bayesian Optimization.
+```py
+# Create a list of examples
+pool_list = [
+  "1-bromoheptane",
+  "1-bromohexane",
+  "1-bromo-2-methylpropane",
+  "butan-1-ol"
+]
+
+# Create the pool object
+pool=bolift.Pool(pool_list)
+
+# Ask the next point
+asktell.ask(pool)
+
+# Output:
+(['1-bromo-2-methylpropane'], [-1.284916344093158], [-1.92])
+
+```
+Where the first value is the selected point, the second value is the value of the acquisition function, and the third value is the predicted mean.
+
+Let's tell this point to the model with its correct label and make a prediction:
+```py
+asktell.tell("1-bromo-2-methylpropane", -2.430)
+
+yhat = asktell.predict("1-bromobutane")
+print(yhat.mean(), yhat.std())
+```
+
+This prediction returns $-1.866 \pm 0.012$.
+Which is closer to the label of -2.370 for the 1-bromobutane and the uncertainty also decreased.
+
+### Customising the model
 
 `bolift` provides different models depending on the prompt you want to use.
 One example of usage can be seen in the following:
@@ -50,60 +108,6 @@ asktell = bolift.AskTellFewShotTopk(
 ```
 Other arguments can be used to customize the prompt (`prefix`, `prompt_template`, `suffix`) and the in-context learning procedure (`use_quantiles`, `n_quantiles`).
 Refer to the notebooks available in the paper directory to see examples on how to use bolift.
-
-### Making a prediction
-
-Examples can be shown to the model by simply using the `tell` method:
-
-```py
-asktell.tell("3-chloroaniline", -1.37)
-asktell.tell("nitromethane", 0.26)
-asktell.tell("1-bromo-2-methylpropane", -2.43)
-asktell.tell("3-chlorophenol", -0.7)
-```
-
-`bolift` will use these points to create the prompt for a prediction. 
-A prediction can be done using:
-
-```py
-yhat = asktell.predict("3-(3,4-dichlorophenyl)-1-methoxy-1-methylurea")
-```
-
-The prediction returns a probability distribution.
-We can look into the predictions more easily by using the `mean` and the `std` methods:
-
-```py
-yhat.mean(), yhat.std()
-```
-
-`3-(3,4-dichlorophenyl)-1-methoxy-1-methylurea` has a LogS solubility of $-3.592$.
-However, in this example `bolift` predicted a LogS of $-0.187 \pm 1.751$, which is not a good prediction.
-The reason is that only 4 points were told to the model
-
-### Improving the model
-
-In the ask/tell interface, we can use Bayesian optimization and the `ask` method to select a new datapoint from a pool.
-`bolift` also implements a pool object to efficiently deal with a pool of examples.
-
-```py
-pool_list = [
-  "phenol",
-  "1-methoxy-4-prop-1-enylbenzene",
-  "2-aminophenol",
-  "1,1-dimethyl-3-(8-tricyclo[5.2.1.02,6]decanyl)urea",
-  "1,1,2,3,4,4-hexachlorobuta-1,3-diene"
-]
-pool = bolift.Pool(list(pool_list), formatter=lambda x: f"iupac name {x}")
-
-asktell.ask(pool, aq_fxn="expected_improvement")
-```
-
-Notice that a formatter is also needed for the pool.
-In this example, the expected `improvement_acquisition` function was used.
-`upper_confidence_bound`, `greedy`, `probability_of_improvement` and `random` are also accepted values.
-The `ask` method returns the selected elements (by default, it returns one element. The `k` argument can be used customize that), the value of the acquisition function and the prediction for that element.
-
-Subsequently, we can address a label and `tell` this new points to the model.
 
 ### Inverse design
 
