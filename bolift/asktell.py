@@ -20,7 +20,10 @@ from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain.vectorstores import FAISS, Chroma
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.prompts.example_selector import MaxMarginalRelevanceExampleSelector,SemanticSimilarityExampleSelector
+from langchain.prompts.example_selector import (
+    MaxMarginalRelevanceExampleSelector,
+    SemanticSimilarityExampleSelector,
+)
 
 _answer_choices = ["A", "B", "C", "D", "E"]
 
@@ -59,7 +62,7 @@ class AskTellFewShotMulti:
         use_quantiles: bool = False,
         n_quantiles: int = 100,
         verbose: bool = False,
-        cos_sim: bool = False
+        cos_sim: bool = False,
     ) -> None:
         """Initialize Ask-Tell optimizer.
 
