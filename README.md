@@ -28,6 +28,13 @@ bolift can simply be installed using pip:
 pip install bolift
 ```
 
+Some additional requirements are needed to use the Gaussian Process Regressor (GPR) module.
+They can also be installed using pip:
+
+```bash
+pip install bolift[gpr]
+```
+
 ## Usage 💻
 
 You need to set up your OpenAI API key in order to use BO-LIFT.
@@ -107,7 +114,15 @@ asktell = bolift.AskTellFewShotTopk(
 )
 ```
 Other arguments can be used to customize the prompt (`prefix`, `prompt_template`, `suffix`) and the in-context learning procedure (`use_quantiles`, `n_quantiles`).
-Refer to the notebooks available in the paper directory to see examples on how to use bolift.
+Additionally, we implemented other models. A brief list can be seen below:
+- AskTellFewShotMulti;
+- AskTellFewShotTopk;
+- AskTellFinetuning;
+- AskTellRidgeKernelRegression;
+- AskTellGPR;
+- AskTellNearestNeighbor.
+
+Refer to the [notebooks](https://github.com/ur-whitelab/BO-LIFT/tree/main/paper) available in the paper directory to see examples of how to use bolift and the [paper](https://arxiv.org/abs/2304.05341) for a detailed description of the classes.
 
 ### Inverse design
 
@@ -142,12 +157,14 @@ the synthesis procedure:"A 30 wt% tungsten carbide catalyst was prepared with Cu
 
 ### Citation
 
-Please, cite [Ramos et al.](#):
+Please, cite [Ramos et al.](https://arxiv.org/abs/2304.05341):
 ```
-@article{ramos2023bolift,
-  title={Bayesian Optimization of Catalysts With In-context Learning},
-  author={Ramos, Mayk and Michtavy, Shane and Porosoff, Marc and White, Andrew D},
-  journal={arXiv preprint arXiv:submit/4836185},
-  year={2023},
+@misc{ramos2023bayesian,
+      title={Bayesian Optimization of Catalysts With In-context Learning}, 
+      author={Mayk Caldas Ramos and Shane S. Michtavy and Marc D. Porosoff and Andrew D. White},
+      year={2023},
+      eprint={2304.05341},
+      archivePrefix={arXiv},
+      primaryClass={physics.chem-ph}
 }
 ```
