@@ -12,7 +12,7 @@ By selecting examples, it can consider more training data than it fits in the mo
 Being able to predict uncertainty, allow the employment of interesting techniques such as Bayesian Optimization.
 
 ## Table of content
--[BO-LIFT](#-bo-lift-bayesian-optimization-using-in-context-learning)
+- [BO-LIFT](#-bo-lift-bayesian-optimization-using-in-context-learning)
   - [Install](#install-)
   - [Usage](#usage-)
     - [Quickstart](#quickstart-)
