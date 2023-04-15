@@ -2,7 +2,7 @@
 
 
 ![version](https://img.shields.io/badge/version-0.0.1-brightgreen)
-[![paper](https://img.shields.io/badge/paper-arXiv-red)](#)
+[![paper](https://img.shields.io/badge/paper-arXiv-red)](https://arxiv.org/abs/2304.05341)
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
 
 
