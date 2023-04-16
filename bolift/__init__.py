@@ -9,3 +9,4 @@ except ImportError:
 from .asktellRidgeRegression import AskTellRidgeKernelRegression
 from .asktellNearestNeighbor import AskTellNearestNeighbor
 from .pool import Pool
+from .tool import BOLiftTools
