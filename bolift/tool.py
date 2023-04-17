@@ -6,7 +6,7 @@ import os
 import pandas as pd
 
 
-class BOLiftTools(BaseTool):
+class BOLiftTool(BaseTool):
     name = "Experiment Designer"
     description = "Propose or predict experiments using stateful ask-and-tell. "
     "Syntax: Tell {CSV_FILE}. Adds training examples to model. "
@@ -16,7 +16,7 @@ class BOLiftTools(BaseTool):
 
     def __init__(self, pool: Pool, asktell: Optional[AskTellFewShotTopk] = None, ):
         # call the parent class constructor
-        super(BOLiftTools, self).__init__()
+        super(BOLiftTool, self).__init__()
 
         if asktell is None:
             asktell = AskTellFewShotTopk()
