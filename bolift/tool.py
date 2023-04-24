@@ -6,11 +6,12 @@ import os
 import pandas as pd
 
 
-class BOLiftTool(BaseTool):
+class BOLiftTool(BaseTool): 
     name = "Experiment Designer"
-    description = "Propose or predict experiments using stateful ask-and-tell. "
-    "Syntax: Tell {CSV_FILE}. Adds training examples to model. "
-    "Ask. Returns best experiment to run next. "
+    description = ("Propose or predict experiments using stateful ask-and-tell Bayes Optimizer. " 
+    "Syntax: Tell {{CSV_FILE}}. Adds training examples to model, {{CSV_FILE}}. No header and only two columns: x in column 0, y in column 1. "
+    "Ask. Returns optimal experiment to run next. Must call Tell first."
+    "Best. Returns predicted  experiment. Must call Tell first.")
     asktell: AskTellFewShotTopk = None
     pool: Pool = None
 
@@ -29,11 +30,13 @@ class BOLiftTool(BaseTool):
         elif query.startswith("Tell"):
             cmd = "tell"
             arg = query[4:].strip()
+        elif query.startswith("Best"):
+            cmd = "best"
         else:
-            return "Invalid command. Syntax: Ask. Returns best experiment to run next. Tell {CSV_FILE}. Adds training examples to model."
+            return "Invalid command to this tool"
         if cmd == "ask":
             results = self.asktell.ask(self.pool)
-            return f"Best experiments to run next: {results[0][0]}"
+            return f"Optimal experiment to run next: {results[0][0]}"
         elif cmd == "tell":
             # check the path exists
             if not os.path.exists(arg):
@@ -43,7 +46,9 @@ class BOLiftTool(BaseTool):
             for i in range(len(data)):
                 self.asktell.tell(data.iloc[i, 0], data.iloc[i, 1])
             return f"Added {len(data)} training examples."
-            
+        elif cmd == "best":
+            results = self.asktell.ask(self.pool, aq_fxn="greedy")
+            return f"Best experiment is: {results[0][0]}"
     async def _arun(self, query: str) -> str:
         """Use the tool asynchronously."""
         raise NotImplementedError()

@@ -57,7 +57,7 @@ class AskTellFewShotMulti:
         y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
         y_name: str = "output",
         x_name: str = "input",
-        selector_k: Optional[int] = None,
+        selector_k: Optional[int] = 5,
         k: int = 5,
         use_quantiles: bool = False,
         n_quantiles: int = 100,
