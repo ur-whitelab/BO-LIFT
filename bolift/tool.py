@@ -10,8 +10,8 @@ class BOLiftTool(BaseTool):
     name = "Experiment Designer"
     description = ("Propose or predict experiments using stateful ask-and-tell Bayes Optimizer. " 
     "Syntax: Tell {{CSV_FILE}}. Adds training examples to model, {{CSV_FILE}}. No header and only two columns: x in column 0, y in column 1. "
-    "Ask. Returns optimal experiment to run next. Must call Tell first."
-    "Best. Returns predicted  experiment. Must call Tell first.")
+    "Ask. Returns optimal experiment to run next. Must call Tell first. "
+    "Best. Returns predicted experiment. Must call Tell first.")
     asktell: AskTellFewShotTopk = None
     pool: Pool = None
 
