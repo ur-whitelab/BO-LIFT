@@ -8,7 +8,7 @@ import pandas as pd
 
 class BOLiftTool(BaseTool): 
     name = "Experiment Designer"
-    description = ("Propose or predict experiments using stateful ask-and-tell Bayes Optimizer. " 
+    description = ("Propose or predict experiments using stateful ask-and-tell Bayes Optimizer. "
     "Syntax: Tell {{CSV_FILE}}. Adds training examples to model, {{CSV_FILE}}. No header and only two columns: x in column 0, y in column 1. "
     "Ask. Returns optimal experiment to run next. Must call Tell first. "
     "Best. Returns predicted experiment. Must call Tell first.")
@@ -42,9 +42,12 @@ class BOLiftTool(BaseTool):
             if not os.path.exists(arg):
                 return f"File {arg} does not exist."
             # load the data column 0 is x, column 1 is y
-            data = pd.read_csv(arg, header=None)
-            for i in range(len(data)):
-                self.asktell.tell(data.iloc[i, 0], data.iloc[i, 1])
+            try:
+                data = pd.read_csv(arg, header=None)
+                for i in range(len(data)):
+                    self.asktell.tell(data.iloc[i, 0], data.iloc[i, 1])
+            except:
+                return 'Error in input file. Make sure that the file has no header and only has 2 columns: x and y. Remove all non-numeric values from y.'
             return f"Added {len(data)} training examples."
         elif cmd == "best":
             results = self.asktell.ask(self.pool, aq_fxn="greedy")
@@ -52,3 +55,4 @@ class BOLiftTool(BaseTool):
     async def _arun(self, query: str) -> str:
         """Use the tool asynchronously."""
         raise NotImplementedError()
+
