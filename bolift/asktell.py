@@ -379,7 +379,8 @@ class AskTellFewShotMulti:
         possible_x: Union[Pool, List[str]],
         aq_fxn: str = "upper_confidence_bound",
         k: int = 1,
-        inv_filter: int = 16,
+        inv_filter: int = 8,
+        aug_random_filter: int = 8,
         _lambda: float = 0.5,
     ) -> Tuple[List[str], List[float], List[float]]:
         """Ask the optimizer for the next x to try.
@@ -391,6 +392,7 @@ class AskTellFewShotMulti:
             aq_fxn: Acquisition function to use.
             k: Number of x values to return.
             inv_filter: Reduce pool size to this number with inverse model. If 0, not used
+            aug_random_filter: Add this many random examples to the pool to increase diversity after reducing pool with inverse model
             _lambda: Lambda value to use for UCB
         Return:
             The selected x values, their acquisition function values, and the predicted y modes.
@@ -421,11 +423,10 @@ class AskTellFewShotMulti:
         else:
             best = np.max(self._ys)
         if inv_filter != 0 and inv_filter < len(possible_x):
-            # not sure if this is too important,
-            # but to get some diversity we
-            # take last added y AND best
             approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
             possible_x_l = possible_x.approx_sample(approx_x, inv_filter)
+            if aug_random_filter:
+                possible_x_l += possible_x.sample(aug_random_filter)
 
         else:
             possible_x_l = list(possible_x)
