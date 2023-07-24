@@ -426,7 +426,7 @@ class AskTellFewShotMulti:
             approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
             possible_x_l = possible_x.approx_sample(approx_x, inv_filter)
             if aug_random_filter:
-                possible_x_l += possible_x.sample(aug_random_filter)
+                possible_x_l.extend(possible_x.sample(aug_random_filter))
 
         else:
             possible_x_l = list(possible_x)
