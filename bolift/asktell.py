@@ -370,8 +370,8 @@ class AskTellFewShotMulti:
                     )
 
         # compute mean and standard deviation
-        # if len(x) == 1:
-        #     return results[0]
+        if len(x) == 1:
+            return results[0]
         return results
 
     def ask(
