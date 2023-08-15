@@ -1,5 +1,5 @@
 """utilities for building and selecting from a pool"""
-from typing import List, Any, Callable
+from typing import List, Any, Callable, Union
 import numpy as np
 from langchain.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
@@ -143,16 +143,19 @@ class TreePool:
         if len(pattern.findall(prompt_template)) != len(pool):
             raise ValueError("Prompt template must have the same number of variables as the pool")
         
+        self.formatter = formatter
         self.prompt_template = prompt_template
         self._selected = []
         self._pool = pool
         self._root = TreeNode('root', None)
         self._build_tree()
-        self._available = [leaf.get_branch() for leaf in self.get_leafs()]
+        self._available = [self._format_branch(leaf.get_branch()) for leaf in self.get_leafs()]
         # Probably this self._available is not the best way to track all available paths. 
         # Refactor this. Looking over the tree may be more memory efficient (maybe slower?)
         self._selected = []
 
+    def _format_branch(self, branch: OrderedDict[str, Any]) -> OrderedDict[str, str]:
+        return OrderedDict([(k, [self.formatter(v[0])]) for k, v in branch.items()])
 
     def _build_tree(self):
         keys = list(self._pool.keys())
@@ -179,6 +182,9 @@ class TreePool:
             return [leaf for child in root.get_children_list() for leaf in self.get_leafs(child)]
 
     def count_leafs(self, root=None) -> int:
+        leafs = self.get_leafs(root)
+        if leafs[0] == self._root:
+            return 0
         return len(self.get_leafs(root))
 
     def format_prompt(self, branch: OrderedDict[str, Any]) -> str:
@@ -196,12 +202,12 @@ class TreePool:
         return partial_prompt_template.format(**branch)
 
     def sample(self, n) -> List[str]:
+        if n > self.count_leafs():
+            raise ValueError("Not enough items in pool")
         samples = self._sample(n)
         return [self.format_prompt(sample) for sample in samples]
 
     def _sample(self, n) -> List[OrderedDict[str, Any]]:
-        if n > self.count_leafs():
-            raise ValueError("Not enough items in pool")
         samples = []
         while len(samples) < n:
             node = self._root
@@ -228,9 +234,55 @@ class TreePool:
                 samples.append(sample)
         return sample
     
-    def choose(self) -> None:
-        raise NotImplementedError("Choose is not implemented for TreePool")
+    def make_branch_from_string(self, s: str) -> OrderedDict:
+        pattern = re.escape(self.prompt_template)
+        placeholders = re.findall(r'\{(\w+)\}', self.prompt_template)
+        for placeholder in placeholders:
+            pattern = pattern.replace(r'\{' + placeholder + r'\}', r'(?P<' + placeholder + r'>[^\{\}]+)')
+        
+        match = re.match(pattern, s)
+        if not match:
+            raise ValueError("The string doesn't match the template.")
+        
+        return OrderedDict([(key, [match.group(key).strip()]) for key in placeholders])
+
+    def choose(self, x: Union[str, OrderedDict[str, Any]]) -> None:
+        """Choose a specific item from the pool"""
+        if type(x) is str:
+            x = self.make_branch_from_string(x)
+            # for branch in self._available:
+            #     if self.format_prompt(branch) == x:
+            #         self._selected.append(branch)
+            #         self._available.remove(branch)
+            #         return
+            # raise ValueError("Item not in pool")
+        self._choose(self._format_branch(x))
     
+    def _choose(self, x: OrderedDict[str, Any]) -> None:
+        """Choose a specific item from the pool"""
+        if x not in self._available:
+            raise ValueError("Item not in pool")
+        
+        leaf = None
+        for l in self.get_leafs():
+            if self._format_branch(l.get_branch()) == x:
+                leaf = l
+                break
+        if not leaf:
+            raise ValueError("Item not in TreePool. Check the integrity of the tree")
+
+        node = leaf
+        while node != self._root:
+            parent = node.get_parent()
+            parent.get_children_list().remove(node)
+            if len(parent.get_children_list()) == 0:
+                node = parent
+            else: 
+                break
+
+        self._selected.append(x)
+        self._available.remove(x)
+
     def approx_sample(self, x: str, k: int) -> None:
         raise NotImplementedError("Approximate sample is not implemented for TreePool. Consider using Pool instead")
 
@@ -239,7 +291,7 @@ class TreePool:
         self._root = TreeNode('root', None)
         self._build_tree()
         self._selected = []
-        self._available = [leaf.get_branch() for leaf in self.get_leafs()]
+        self._available = [self._format_branch(leaf.get_branch()) for leaf in self.get_leafs()]
 
     def __str__(self) -> str:
         return f"TreePool of {self.count_leafs()} with {len(self._selected)} selected"

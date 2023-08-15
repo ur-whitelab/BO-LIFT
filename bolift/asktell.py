@@ -441,14 +441,12 @@ class AskTellFewShotMulti:
                     partial_possible_x = [possible_x.partial_format_prompt(child.get_branch()) for child in node.get_children_list()]
                     node_retriever = dict(zip(partial_possible_x, node.get_children_list()))
                     selected_child = self._ask(partial_possible_x, best, aq_fxn, 1)
-                    print(selected_child)
                     selected_child = selected_child[0][0]
                     node = node_retriever[selected_child]
-                if possible_x.format_prompt(node.get_branch()) not in possible_x_l:
-                    print("\nCOOOOOOOOOL: NEW SAMPLE!!!!!\n")
-                    possible_x_l.append(possible_x.format_prompt(node.get_branch()))
-                else:
-                    print("\nOOOOOH NOOOOOO: A DUPLICATE!!!!\n")
+                selected = possible_x.format_prompt(node.get_branch())
+                while selected in possible_x_l:
+                    selected = possible_x.sample(1)[0]
+                possible_x_l.append(selected)
         else:
             raise ValueError("Unknown pool type")
         
@@ -467,6 +465,8 @@ class AskTellFewShotMulti:
     ) -> Tuple[List[str], List[float], List[float]]:
         results = self.predict(possible_x)
         # drop empties
+        if type(results) != type([]):
+            results = [results]
         results = [r for r in results if len(r) > 0]
         aq_vals = [aq_fxn(r, best) for r in results]
         selected = np.argsort(aq_vals)[::-1][:k]
