@@ -45,11 +45,7 @@ def test_parse_response_topk():
     g = llm.generate([prompt]).generations
     result = llm_model.parse_response_topk(g[0])
     # make sure answer is max
-<<<<<<< HEAD
     assert abs(result.mode().astype(int) - 4) <= 1
-=======
-    assert result.mode() == pytest.approx(4, 0.001)
->>>>>>> 0e9c7fa (changed some tests to compare approximately)
 
 
 def test_tell_fewshot():
@@ -98,8 +94,8 @@ def test_tell_fewshot_topk():
     asktell.tell(1, 2)
     asktell.tell(16, 32)
     dist = asktell.predict(2)
-    m = dist.mode().astype(int)
-    assert m == 4
+    m = dist.mode()
+    assert m == pytest.approx(4, 0.001)
 
 
 def test_tell_fewshot_vark_topk():
@@ -151,11 +147,7 @@ def test_tell_fewshot_selector_less():
     for i in range(5):
         asktell.tell(i, 2 + i)
     dist = asktell.predict(3)
-<<<<<<< HEAD
     assert abs(3 + 2 - dist.mode().astype(int)) < 10
-=======
-    assert dist.mode() == pytest.approx(5, 0.001)
->>>>>>> 0e9c7fa (changed some tests to compare approximately)
 
 
 def test_tell_fewshot_topk_selector():
@@ -168,11 +160,7 @@ def test_tell_fewshot_topk_selector():
     for i in range(5):
         asktell.tell(i, 2 + i)
     dist = asktell.predict(3)
-<<<<<<< HEAD
     assert abs(3 + 2 - dist.mode().astype(int)) < 10
-=======
-    assert dist.mode() == pytest.approx(5, 0.001)
->>>>>>> 0e9c7fa (changed some tests to compare approximately)
 
 
 def test_ask_ei_fewshot():
