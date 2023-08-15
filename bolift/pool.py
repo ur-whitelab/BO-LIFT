@@ -76,7 +76,7 @@ class Pool:
         return iter(self._available)
 
 
-class TreeNode():
+class TreeNode:
     def __init__(self, name: str , value: Any, parent: 'TreeNode' = None):
         self.name = name
         self.value = value
@@ -122,7 +122,7 @@ class TreeNode():
 
 
 
-class TreePool():
+class TreePool:
     '''
     
     Example:
