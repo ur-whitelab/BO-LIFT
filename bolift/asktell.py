@@ -15,7 +15,7 @@ from .aqfxns import (
     upper_confidence_bound,
     greedy,
 )
-from .pool import Pool
+from .pool import Pool, TreePool
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain.vectorstores import FAISS, Chroma
@@ -376,10 +376,11 @@ class AskTellFewShotMulti:
 
     def ask(
         self,
-        possible_x: Union[Pool, List[str]],
+        possible_x: Union[Pool, List[str], TreePool, OrderedDict[str, Any]],
         aq_fxn: str = "upper_confidence_bound",
         k: int = 1,
-        inv_filter: int = 16,
+        inv_filter: int = 8,
+        aug_random_filter: int = 8,
         _lambda: float = 0.5,
     ) -> Tuple[List[str], List[float], List[float]]:
         """Ask the optimizer for the next x to try.
@@ -391,6 +392,7 @@ class AskTellFewShotMulti:
             aq_fxn: Acquisition function to use.
             k: Number of x values to return.
             inv_filter: Reduce pool size to this number with inverse model. If 0, not used
+            aug_random_filter: Add this many random examples to the pool to increase diversity after reducing pool with inverse model
             _lambda: Lambda value to use for UCB
         Return:
             The selected x values, their acquisition function values, and the predicted y modes.
@@ -398,6 +400,8 @@ class AskTellFewShotMulti:
         """
         if type(possible_x) == type([]):
             possible_x = Pool(possible_x, self.format_x)
+        elif type(possible_x) == type(OrderedDict()):
+            possible_x = TreePool(possible_x, self._prompt_template.prompt, self.format_x) #need to input the string for the prompt template
 
         if aq_fxn == "probability_of_improvement":
             aq_fxn = probability_of_improvement
@@ -420,15 +424,32 @@ class AskTellFewShotMulti:
             best = 0
         else:
             best = np.max(self._ys)
-        if inv_filter != 0 and inv_filter < len(possible_x):
-            # not sure if this is too important,
-            # but to get some diversity we
-            # take last added y AND best
-            approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
-            possible_x_l = possible_x.approx_sample(approx_x, inv_filter)
 
+        if isinstance(possible_x, Pool):
+            if inv_filter != 0 and inv_filter < len(possible_x):
+                approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
+                possible_x_l = possible_x.approx_sample(approx_x, inv_filter)
+                if aug_random_filter:
+                    possible_x_l.extend(possible_x.sample(aug_random_filter))
+            else:
+                possible_x_l = list(possible_x)
+        elif isinstance(possible_x, TreePool):
+            possible_x_l = []
+            while len(possible_x_l) < k:
+                node = possible_x._root
+                while not node.is_leaf():
+                    partial_possible_x = [possible_x.partial_format_prompt(child.get_branch()) for child in node.get_children_list()]
+                    node_retriever = dict(zip(partial_possible_x, node.get_children_list()))
+                    selected_child = self._ask(partial_possible_x, best, aq_fxn, 1)
+                    selected_child = selected_child[0][0]
+                    node = node_retriever[selected_child]
+                selected = possible_x.format_prompt(node.get_branch())
+                while selected in possible_x_l:
+                    selected = possible_x.sample(1)[0]
+                possible_x_l.append(selected)
         else:
-            possible_x_l = list(possible_x)
+            raise ValueError("Unknown pool type")
+        
         results = self._ask(possible_x_l, best, aq_fxn, k)
         if len(results[0]) == 0 and len(possible_x_l) != 0:
             # if we have nothing, just return random one
@@ -444,6 +465,8 @@ class AskTellFewShotMulti:
     ) -> Tuple[List[str], List[float], List[float]]:
         results = self.predict(possible_x)
         # drop empties
+        if type(results) != type([]):
+            results = [results]
         results = [r for r in results if len(r) > 0]
         aq_vals = [aq_fxn(r, best) for r in results]
         selected = np.argsort(aq_vals)[::-1][:k]

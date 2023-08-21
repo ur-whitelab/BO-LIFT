@@ -1,6 +1,7 @@
 from bolift import llm_model
 import bolift
 import numpy as np
+import pytest
 
 np.random.seed(0)
 
@@ -93,8 +94,8 @@ def test_tell_fewshot_topk():
     asktell.tell(1, 2)
     asktell.tell(16, 32)
     dist = asktell.predict(2)
-    m = dist.mode().astype(int)
-    assert m == 4
+    m = dist.mode()
+    assert m == pytest.approx(4, 0.001)
 
 
 def test_tell_fewshot_vark_topk():
