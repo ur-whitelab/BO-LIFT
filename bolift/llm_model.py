@@ -237,7 +237,7 @@ def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
         print("-" * 80)
         print(query_list[0])
         print("-" * 80)
-        print(query_list[0] + completion_response.generations[0][0].text)
+        print(query_list[0], completion_response.generations[0][0].text)
         print("-" * 80)
     results = []
     for gen, q in zip(completion_response.generations, query_list):
@@ -255,7 +255,7 @@ def openai_topk_predict(query_list, llm, verbose, *args, **kwargs):
         print("-" * 80)
         print(query_list[0])
         print("-" * 80)
-        print(query_list[0] + completion_response.generations[0][0].text)
+        print(query_list[0], completion_response.generations[0][0].text)
         print("-" * 80)
     results = []
     for gens in completion_response.generations:
