@@ -53,6 +53,7 @@ class AskTellFewShotMulti:
         model: str = "text-curie-001",
         temperature: Optional[float] = None,
         prefix: Optional[str] = None,
+        inv_prefix: Optional[str] = None,
         x_formatter: Callable[[str], str] = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
         y_name: str = "output",
@@ -93,6 +94,7 @@ class AskTellFewShotMulti:
         self._prompt_template = prompt_template
         self._suffix = suffix
         self._prefix = prefix
+        self._inv_prefix = inv_prefix
         self._model = model
         self._example_count = 0
         self._temperature = temperature
@@ -128,10 +130,14 @@ class AskTellFewShotMulti:
             temperature=0.05 if temperature is None else temperature,
         )
 
-    def _setup_inverse_prompt(self, example: Dict):
+    def _setup_inverse_prompt(self,
+                              example: Dict,
+                              prefix: Optional[str] = None):
+        if prefix is None:
+            prefix = ""
         prompt_template = PromptTemplate(
             input_variables=["x", "y", "y_name", "x_name"],
-            template="If {y_name} is {y}, then {x_name} is {x}\n\n",
+            template="If {y_name} is {y}, then {x_name} is @@@\n{x}###",
         )
         if example is not None:
             prompt_template.format(**example)
@@ -142,29 +148,22 @@ class AskTellFewShotMulti:
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            if not self.cos_sim:
-                example_selector = (
-                    example_selector
-                ) = MaxMarginalRelevanceExampleSelector.from_examples(
-                    [example],
-                    OpenAIEmbeddings(),
-                    FAISS,
-                    k=self._selector_k,
-                )
-            else:
-                example_selector = (
-                    example_selector
-                ) = SemanticSimilarityExampleSelector.from_examples(
-                    [example],
-                    OpenAIEmbeddings(),
-                    Chroma,
-                    k=self._selector_k,
-                )
+            
+            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
+            example_selector = (
+                example_selector
+            ) = sim_selector.from_examples(
+                [example],
+                OpenAIEmbeddings(),
+                FAISS,
+                k=self._selector_k,
+            )
         return FewShotPromptTemplate(
             examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
             example_selector=example_selector,
-            suffix="If {y_name} is {y}, then {x_name} is ",
+            suffix="If {y_name} is {y}, then {x_name} is @@@",
+            prefix=prefix,
             input_variables=["y", "y_name", "x_name"],
         )
 
@@ -202,24 +201,16 @@ class AskTellFewShotMulti:
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            if not self.cos_sim:
-                example_selector = (
-                    example_selector
-                ) = MaxMarginalRelevanceExampleSelector.from_examples(
-                    [example],
-                    OpenAIEmbeddings(),
-                    FAISS,
-                    k=self._selector_k,
-                )
-            else:
-                example_selector = (
-                    example_selector
-                ) = SemanticSimilarityExampleSelector.from_examples(
-                    [example],
-                    OpenAIEmbeddings(),
-                    Chroma,
-                    k=self._selector_k,
-                )
+            
+            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
+            example_selector = (
+                example_selector
+            ) = sim_selector.from_examples(
+                [example],
+                OpenAIEmbeddings(),
+                FAISS,
+                k=self._selector_k,
+            )
         return FewShotPromptTemplate(
             examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
@@ -279,7 +270,7 @@ class AskTellFewShotMulti:
             self.prompt = self._setup_prompt(
                 example_dict, self._prompt_template, self._suffix, self._prefix
             )
-            self.inv_prompt = self._setup_inverse_prompt(inv_example)
+            self.inv_prompt = self._setup_inverse_prompt(inv_example, self._inv_prefix)
             self.llm = self._setup_llm(self._model, self._temperature)
             self.inv_llm = self._setup_inv_llm(self._model, self._temperature)
             self._ready = True
@@ -305,6 +296,7 @@ class AskTellFewShotMulti:
         query = self.inv_prompt.format(
             y=self.format_y(y), y_name=self._y_name, x_name=self._x_name
         )
+        print(query)
         query = wrap_chatllm(query, self.inv_llm)
         x = self.inv_llm(query)
         if type(x) != str:
@@ -330,7 +322,7 @@ class AskTellFewShotMulti:
             self.prompt = self._setup_prompt(
                 None, self._prompt_template, self._suffix, self._prefix
             )
-            self.inv_prompt = self._setup_inverse_prompt(None)
+            self.inv_prompt = self._setup_inverse_prompt(None, self._inv_prefix)
             self.llm = self._setup_llm(self._model)
             self._ready = True
 
@@ -379,8 +371,8 @@ class AskTellFewShotMulti:
         possible_x: Union[Pool, List[str], TreePool, OrderedDict[str, Any]],
         aq_fxn: str = "upper_confidence_bound",
         k: int = 1,
-        inv_filter: int = 8,
-        aug_random_filter: int = 8,
+        inv_filter: int = 16,
+        aug_random_filter: int = 0,
         _lambda: float = 0.5,
     ) -> Tuple[List[str], List[float], List[float]]:
         """Ask the optimizer for the next x to try.
@@ -428,6 +420,7 @@ class AskTellFewShotMulti:
         if isinstance(possible_x, Pool):
             if inv_filter+aug_random_filter < len(possible_x):
                 possible_x_l = []
+                print(inv_filter, aug_random_filter)
                 if inv_filter:
                     approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
                     possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter))
@@ -448,9 +441,7 @@ class AskTellFewShotMulti:
                 selected = possible_x.format_prompt(node.get_branch())
                 while selected in possible_x_l:
                     selected = possible_x.sample(1)[0]
-                    print(f"Randomly selected {selected}")
                 possible_x_l.append(selected)
-                print(possible_x_l)
         else:
             raise ValueError("Unknown pool type")
         
