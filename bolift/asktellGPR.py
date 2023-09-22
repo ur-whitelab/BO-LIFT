@@ -15,13 +15,13 @@ from sklearn.manifold import Isomap
 
 
 class AskTellGPR(AskTellFewShotTopk):
-    def __init__(self, n_components=2, pool=None, cache_path=None, **kwargs):
+    def __init__(self, n_components=2, pool=None, cache_path=None, n_neighbors=5, **kwargs):
         super().__init__(**kwargs)
         self._set_regressor()
         self.examples = []
         self._embedding = OpenAIEmbeddings()
         self._embeddings_cache = self._get_cache(cache_path)
-        self.isomap = Isomap(n_components=n_components)
+        self.isomap = Isomap(n_components=n_components, n_neighbors=n_neighbors)
         self.pool = pool
         if self.pool is not None:
             self._initialize_isomap()
@@ -105,17 +105,6 @@ class AskTellGPR(AskTellFewShotTopk):
         mll = ExactMarginalLogLikelihood(self.regressor.likelihood, self.regressor)
         fit_gpytorch_torch(mll)
 
-    def ask(
-        self,
-        possible_x: Union[Pool, List[str]],
-        aq_fxn: str = "upper_confidence_bound",
-        k: int = 1,
-        inv_filter: int = 16,
-        _lambda: float = 0.5,
-    ) -> Tuple[List[str], List[float], List[float]]:
-        # just have this here to override default
-        return super().ask(possible_x, aq_fxn, k, 0, _lambda)
-
     def tell(
         self, x: str, y: float, alt_ys: Optional[List[float]] = None, train=True
     ) -> None:
@@ -135,16 +124,26 @@ class AskTellGPR(AskTellFewShotTopk):
         self.examples.append(example_dict)
 
         if train:
-            self._train(
-                [
-                    self.prompt.format(
-                        x=ex["x"],
-                        y_name=self._y_name,
-                    )
-                    for ex in self.examples
-                ],
-                [ex["y"] for ex in self.examples],
-            )
+            try:
+                self._train(
+                    [
+                        self.prompt.format(
+                            x=ex["x"],
+                            y_name=self._y_name,
+                        )
+                        for ex in self.examples
+                    ],
+                    [ex["y"] for ex in self.examples],
+                )
+            except ValueError as e:
+                print(40*"-" + "ERROR" + 40*"-")
+                print(e)
+                print("Not enough data to train. " \
+                      "We use an isomap considering 5 neighbors. Therefore, more than 6 points are needed to train the model. " \
+                      "Use train=False to tell N-1 points to the model first. " \
+                      "Then use train=True to tell the last point to train the model.\n" \
+                      "Alternatively, use `pool` to pass a bolift.Pool to train the isomap during AskTellGPR construction.")
+                print(85*"-")
 
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
