@@ -5,6 +5,7 @@ from langchain.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
 from collections import OrderedDict
 import re
+import pandas as pd
 
 class Pool:
     """Class for sampling from pool of possible data points
@@ -106,6 +107,8 @@ class TreeNode:
     def get_branch(self):
         branch = OrderedDict({self.name: [self.value]})
         parent = self.get_parent()
+        if not parent:
+            return branch
         while parent.name != "root":
             branch[parent.name] = [parent.value]
             parent = parent.get_parent()
@@ -135,20 +138,27 @@ class TreePool:
         ["A = 2, B = 4, C = 8, A + B + C?", "A = 3, B = 5, C = 8, A + B + C?", "A = 1, B = 5, C = 8, A + B + C?",]
     '''
 
-    def __init__(self, pool: OrderedDict[str, List[Any]], prompt_template:str, formatter: Callable = lambda x: str(x)) -> None:
-        if type(pool) is not OrderedDict:
-            raise TypeError("Pool must be a OrderedDict with variable names as keys and the range of possible values as values. Keys must be in order accordingly to the prompt")
+    def __init__(self, pool: Union[pd.DataFrame, OrderedDict[str, List[Any]]], prompt_template:str, formatter: Callable = lambda x: str(x)) -> None:
+        if type(pool) not in [OrderedDict, pd.DataFrame]:
+            raise TypeError("Invalid pool. Two types of pool are accepted:\n\tPool must be a OrderedDict with variable names as keys and the range of possible values as values, or\n\tPool must be a pandas DataFrame. \nKeys must be in order accordingly to the prompt_template")
         
         pattern = re.compile(r"\{(.*?)\}")
-        if len(pattern.findall(prompt_template)) != len(pool):
-            raise ValueError("Prompt template must have the same number of variables as the pool")
+        prompt_keys = pattern.findall(prompt_template)
+        pool_keys = pool.keys()
+        if len(pattern.findall(prompt_template)) != len(pool.keys()):
+            raise ValueError(f"Prompt template must have the same number of variables as the pool.\n  {len(prompt_keys)} in prompt_keys\n  {len(pool_keys)} in pool_keys")
+        if not all (prompt_k == pool_k for prompt_k, pool_k in zip(prompt_keys, pool_keys)):
+            raise ValueError(f"Prompt template must have the same variables as the pool. \n  prompt_keys = {prompt_keys}\n  pool_keys = {pool_keys}")
         
         self.formatter = formatter
         self.prompt_template = prompt_template
         self._selected = []
         self._pool = pool
         self._root = TreeNode('root', None)
-        self._build_tree()
+        if isinstance(self._pool, OrderedDict):
+            self._build_tree()
+        elif isinstance(self._pool, pd.DataFrame):
+            self._build_tree_from_df()
         self._available = [self._format_branch(leaf.get_branch()) for leaf in self.get_leafs()]
         # Probably this self._available is not the best way to track all available paths. 
         # Refactor this. Looking over the tree may be more memory efficient (maybe slower?)
@@ -167,6 +177,23 @@ class TreePool:
                     for node in self.get_node_with_key(parent_key):
                         node.add_child(TreeNode(k, child_v))
             parent_key = k
+
+    def _build_tree_from_df(self):
+        for _, row in self._pool.iterrows():
+            current_node = self._root
+            for column, value in row.items():
+                found = False
+                for child in current_node.get_children_list():
+                    if child.name == column and child.value == value:
+                        current_node = child
+                        found = True
+                        break
+                
+                if not found:
+                    new_node = TreeNode(column, value)
+                    current_node.add_child(new_node)
+                    current_node = new_node
+
 
     def get_node_with_key(self, key, root=None) -> List[TreeNode]:
         if root is None:
@@ -250,19 +277,14 @@ class TreePool:
         """Choose a specific item from the pool"""
         if type(x) is str:
             x = self.make_branch_from_string(x)
-            # for branch in self._available:
-            #     if self.format_prompt(branch) == x:
-            #         self._selected.append(branch)
-            #         self._available.remove(branch)
-            #         return
-            # raise ValueError("Item not in pool")
-        self._choose(self._format_branch(x))
-    
-    def _choose(self, x: OrderedDict[str, Any]) -> None:
-        """Choose a specific item from the pool"""
         if x not in self._available:
             raise ValueError("Item not in pool")
         
+        self._choose(self._format_branch(x))
+    
+
+    def _choose(self, x: OrderedDict[str, Any]) -> None:
+        """Choose a specific item from the pool"""
         leaf = None
         for l in self.get_leafs():
             if self._format_branch(l.get_branch()) == x:
@@ -289,7 +311,10 @@ class TreePool:
     def reset(self) -> None:
         """Reset the pool"""
         self._root = TreeNode('root', None)
-        self._build_tree()
+        if isinstance(self._pool, OrderedDict):
+            self._build_tree()
+        elif isinstance(self._pool, pd.DataFrame):
+            self._build_tree_from_df()
         self._selected = []
         self._available = [self._format_branch(leaf.get_branch()) for leaf in self.get_leafs()]
 
