@@ -1,6 +1,7 @@
 import numpy as np
 from functools import partial
 from typing import *
+import re
 from .llm_model import (
     get_llm,
     openai_choice_predict,
@@ -121,12 +122,12 @@ class AskTellFewShotMulti:
         return get_llm(
             model_name=model,
             # put stop with suffix, so it doesn't start babbling
-            stop=[
-                self.prompt.suffix.split()[0],
-                self.inv_prompt.suffix.split()[0],
-                # "\n",
-            ],
-            max_tokens=256,
+            # stop=[
+            #     self.prompt.suffix.split()[0],
+            #     self.inv_prompt.suffix.split()[0],
+            #     "\n",
+            # ],
+            max_tokens=512,
             temperature=0.05 if temperature is None else temperature,
         )
 
@@ -300,6 +301,8 @@ class AskTellFewShotMulti:
         x = self.inv_llm(query)
         if type(x) != str:
             return x.content
+        pattern = r'@@@\n([\s\S]*?)###'
+        x = [p.strip() for p in re.findall(pattern, "@@@\n"+x)]
         return x
 
     def set_calibration_factor(self, calibration_factor):
@@ -419,10 +422,11 @@ class AskTellFewShotMulti:
         if isinstance(possible_x, Pool):
             if inv_filter+aug_random_filter < len(possible_x):
                 possible_x_l = []
-                print(inv_filter, aug_random_filter)
                 if inv_filter:
                     approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
-                    possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter))
+                    for i, apxi in enumerate(approx_x):
+                        possible_x_l.extend(possible_x.approx_sample(apxi, inv_filter//len(approx_x)))
+                    # possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter))
                 if aug_random_filter:
                     possible_x_l.extend(possible_x.sample(aug_random_filter))
             else:
