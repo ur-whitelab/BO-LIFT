@@ -15,7 +15,7 @@ from .aqfxns import (
     upper_confidence_bound,
     greedy,
 )
-from .pool import Pool, TreePool
+from .pool import Pool
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
 from langchain.vectorstores import FAISS, Chroma
@@ -376,7 +376,7 @@ class AskTellFewShotMulti:
             aq_fxn: Acquisition function to use.
             k: Number of x values to return.
             inv_filter: Reduce pool size to this number with inverse model. If 0, not used
-            aug_random_filter: Add this many random examples to the pool to increase diversity after reducing pool with inverse model
+            aug_random_filter: Add this man y random examples to the pool to increase diversity after reducing pool with inverse model
             _lambda: Lambda value to use for UCB
         Return:
             The selected x values, their acquisition function values, and the predicted y modes.
