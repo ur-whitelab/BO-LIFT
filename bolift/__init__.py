@@ -8,5 +8,5 @@ except ImportError:
     print("GPR Packages not installed. Do `pip install bolift[gpr]` to install them")
 from .asktellRidgeRegression import AskTellRidgeKernelRegression
 from .asktellNearestNeighbor import AskTellNearestNeighbor
-from .pool import Pool, TreeNode, TreePool
+from .pool import Pool
 from .tool import BOLiftTool
