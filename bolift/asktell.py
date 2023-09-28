@@ -53,7 +53,6 @@ class AskTellFewShotMulti:
         model: str = "text-curie-001",
         temperature: Optional[float] = None,
         prefix: Optional[str] = None,
-        inv_prefix: Optional[str] = None,
         x_formatter: Callable[[str], str] = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
         y_name: str = "output",
@@ -94,7 +93,6 @@ class AskTellFewShotMulti:
         self._prompt_template = prompt_template
         self._suffix = suffix
         self._prefix = prefix
-        self._inv_prefix = inv_prefix
         self._model = model
         self._example_count = 0
         self._temperature = temperature
@@ -130,11 +128,7 @@ class AskTellFewShotMulti:
             temperature=0.05 if temperature is None else temperature,
         )
 
-    def _setup_inverse_prompt(self,
-                              example: Dict,
-                              prefix: Optional[str] = None):
-        if prefix is None:
-            prefix = ""
+    def _setup_inverse_prompt(self, example: Dict):
         prompt_template = PromptTemplate(
             input_variables=["x", "y", "y_name", "x_name"],
             template="If {y_name} is {y}, then {x_name} is @@@\n{x}###",
@@ -163,7 +157,6 @@ class AskTellFewShotMulti:
             example_prompt=prompt_template,
             example_selector=example_selector,
             suffix="If {y_name} is {y}, then {x_name} is @@@",
-            prefix=prefix,
             input_variables=["y", "y_name", "x_name"],
         )
 
@@ -270,7 +263,7 @@ class AskTellFewShotMulti:
             self.prompt = self._setup_prompt(
                 example_dict, self._prompt_template, self._suffix, self._prefix
             )
-            self.inv_prompt = self._setup_inverse_prompt(inv_example, self._inv_prefix)
+            self.inv_prompt = self._setup_inverse_prompt(inv_example)
             self.llm = self._setup_llm(self._model, self._temperature)
             self.inv_llm = self._setup_inv_llm(self._model, self._temperature)
             self._ready = True
@@ -321,7 +314,7 @@ class AskTellFewShotMulti:
             self.prompt = self._setup_prompt(
                 None, self._prompt_template, self._suffix, self._prefix
             )
-            self.inv_prompt = self._setup_inverse_prompt(None, self._inv_prefix)
+            self.inv_prompt = self._setup_inverse_prompt(None)
             self.llm = self._setup_llm(self._model)
             self._ready = True
 
@@ -367,7 +360,7 @@ class AskTellFewShotMulti:
 
     def ask(
         self,
-        possible_x: Union[Pool, List[str], TreePool, OrderedDict[str, Any]],
+        possible_x: Union[Pool, List[str]],
         aq_fxn: str = "upper_confidence_bound",
         k: int = 1,
         inv_filter: int = 16,
@@ -391,8 +384,6 @@ class AskTellFewShotMulti:
         """
         if type(possible_x) == type([]):
             possible_x = Pool(possible_x, self.format_x)
-        elif type(possible_x) == type(OrderedDict()):
-            possible_x = TreePool(possible_x, self._prompt_template.prompt, self.format_x) #need to input the string for the prompt template
 
         if aq_fxn == "probability_of_improvement":
             aq_fxn = probability_of_improvement
@@ -416,33 +407,15 @@ class AskTellFewShotMulti:
         else:
             best = np.max(self._ys)
 
-        if isinstance(possible_x, Pool):
-            if inv_filter+aug_random_filter < len(possible_x):
-                possible_x_l = []
-                print(inv_filter, aug_random_filter)
-                if inv_filter:
-                    approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
-                    possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter))
-                if aug_random_filter:
-                    possible_x_l.extend(possible_x.sample(aug_random_filter))
-            else:
-                possible_x_l = list(possible_x)
-        elif isinstance(possible_x, TreePool):
+        if inv_filter+aug_random_filter < len(possible_x):
             possible_x_l = []
-            while len(possible_x_l) < k:
-                node = possible_x._root
-                while not node.is_leaf():
-                    partial_possible_x = [possible_x.partial_format_prompt(child.get_branch()) for child in node.get_children_list()]
-                    node_retriever = dict(zip(partial_possible_x, node.get_children_list()))
-                    selected_child = self._ask(partial_possible_x, best, aq_fxn, 1)
-                    selected_child = selected_child[0][0]
-                    node = node_retriever[selected_child]
-                selected = possible_x.format_prompt(node.get_branch())
-                while selected in possible_x_l:
-                    selected = possible_x.sample(1)[0]
-                possible_x_l.append(selected)
+            if inv_filter:
+                approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
+                possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter))
+            if aug_random_filter:
+                possible_x_l.extend(possible_x.sample(aug_random_filter))
         else:
-            raise ValueError("Unknown pool type")
+            possible_x_l = list(possible_x)
         
         results = self._ask(possible_x_l, best, aq_fxn, k)
         if len(results[0]) == 0 and len(possible_x_l) != 0:
