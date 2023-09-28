@@ -149,13 +149,14 @@ def test_tell_fewshot_selector_less():
     dist = asktell.predict(3)
     assert abs(3 + 2 - dist.mode().astype(int)) < 10
 
-
-def test_tell_fewshot_topk_selector():
+@pytest.mark.parametrize("model_name", ["text-curie-001", "gpt-3.5-turbo"])
+def test_tell_fewshot_topk_selector(model_name):
     asktell = bolift.AskTellFewShotTopk(
         x_formatter=lambda x: f"y = 2 + {x}",
         selector_k=3,
         y_formatter=lambda y: str(int(y)),
         verbose=True,
+        model=model_name,
     )
     for i in range(5):
         asktell.tell(i, 2 + i)
@@ -191,9 +192,9 @@ def test_ask_ei_fewshot_pool_topk():
     best, _, _ = asktell.ask(pool, inv_filter=3)
     assert best[0] > 10
 
-
-def test_ask_ei_fewshot_topk():
-    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"y = 2 * {x}")
+@pytest.mark.parametrize("model_name", ["text-curie-001", "gpt-3.5-turbo"])
+def test_ask_ei_fewshot_topk(model_name):
+    asktell = bolift.AskTellFewShotTopk(x_formatter=lambda x: f"y = 2 * {x}", model=model_name)
     asktell.tell(2, 4)
     asktell.tell(1, 2)
     asktell.tell(16, 32)
@@ -207,11 +208,11 @@ def test_ask_zero_fewshot():
     assert scores[0] > scores[1]
     asktell.ask([2, 8], k=2, aq_fxn="greedy")
 
-
-def test_ask_zero_fewshot_topk():
+@pytest.mark.parametrize("model_name", ["text-babbage-001", "gpt-3.5-turbo"])
+def test_ask_zero_fewshot_topk(model_name):
     asktell = bolift.AskTellFewShotTopk(
         x_formatter=lambda x: f"y = f({x}) for the shifted Ackley function",
-        model="text-babbage-001",
+        model=model_name,
     )
     _, scores, means = asktell.ask([2, 8], k=2)
     assert scores[0] >= scores[1]
