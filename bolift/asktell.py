@@ -107,6 +107,7 @@ class AskTellFewShotMulti:
         self._verbose = verbose
         self.tokens_used = 0
         self.cos_sim = cos_sim
+        self.examples = []
 
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         return get_llm(
@@ -127,7 +128,7 @@ class AskTellFewShotMulti:
             #     self.inv_prompt.suffix.split()[0],
             #     "\n",
             # ],
-            max_tokens=512,
+            max_tokens=256,
             temperature=0.05 if temperature is None else temperature,
         )
 
@@ -151,9 +152,7 @@ class AskTellFewShotMulti:
                 raise ValueError("Cannot do zero-shot with selector")
             
             sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
-            example_selector = (
-                example_selector
-            ) = sim_selector.from_examples(
+            example_selector = sim_selector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
                 FAISS,
@@ -204,9 +203,7 @@ class AskTellFewShotMulti:
                 raise ValueError("Cannot do zero-shot with selector")
             
             sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
-            example_selector = (
-                example_selector
-            ) = sim_selector.from_examples(
+            example_selector = sim_selector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
                 FAISS,
@@ -265,6 +262,7 @@ class AskTellFewShotMulti:
     def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
         """Tell the optimizer about a new example."""
         example_dict, inv_example = self._tell(x, y, alt_ys)
+        self.examples.append(example_dict)
         # we want to have example
         # to initialize prompts, so send it
         if not self._ready:
@@ -419,14 +417,45 @@ class AskTellFewShotMulti:
         else:
             best = np.max(self._ys)
 
-        if isinstance(possible_x, Pool):
+
+        if self._example_count < self._k:
+            # if we don't have enough examples, create a random subpool
+            # this is to avoid the model to select too similar points when the context
+            # is not diverse enough
+
+            # Get a random subpool
+            if inv_filter+aug_random_filter < len(possible_x):
+                possible_x_l = possible_x.sample(inv_filter+aug_random_filter)
+            else:
+                possible_x_l = list(possible_x)
+            
+            # Create a vector database
+            example_selector = SemanticSimilarityExampleSelector.from_examples(
+                [{'prompt': ex} for ex in possible_x_l], 
+                OpenAIEmbeddings(), 
+                FAISS, 
+                k=len(possible_x_l),
+            )
+
+            # Get last example previously shown to the model
+            example = self.examples[-1]['x']
+
+            # Get the most diverse examples and delete the database
+            selected = example_selector.select_examples({'prompt': example})[::-1][:k]
+            selected = [s['prompt'] for s in selected]
+            # example_selector.vectorstore.delete_collection()
+            return (
+                selected,
+                [0] * k,
+                [0] * k,
+            )
+        elif isinstance(possible_x, Pool):
             if inv_filter+aug_random_filter < len(possible_x):
                 possible_x_l = []
                 if inv_filter:
                     approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
                     for i, apxi in enumerate(approx_x):
                         possible_x_l.extend(possible_x.approx_sample(apxi, inv_filter//len(approx_x)))
-                    # possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter))
                 if aug_random_filter:
                     possible_x_l.extend(possible_x.sample(aug_random_filter))
             else:
@@ -544,24 +573,14 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            if not self.cos_sim:
-                example_selector = (
-                    example_selector
-                ) = MaxMarginalRelevanceExampleSelector.from_examples(
-                    [example],
-                    OpenAIEmbeddings(),
-                    FAISS,
-                    k=self._selector_k,
-                )
-            else:
-                example_selector = (
-                    example_selector
-                ) = SemanticSimilarityExampleSelector.from_examples(
-                    [example],
-                    OpenAIEmbeddings(),
-                    Chroma,
-                    k=self._selector_k,
-                )
+            
+            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
+            example_selector = sim_selector.from_examples(
+                [example],
+                OpenAIEmbeddings(),
+                FAISS,
+                k=self._selector_k,
+            )
         return FewShotPromptTemplate(
             examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
