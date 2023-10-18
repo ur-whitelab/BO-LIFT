@@ -5,7 +5,7 @@ from .asktell import AskTellFewShotTopk
 from .llm_model import GaussDist
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.prompts.example_selector import SemanticSimilarityExampleSelector
 
@@ -77,12 +77,10 @@ class AskTellNearestNeighbor(AskTellFewShotTopk):
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            example_selector = (
-                example_selector
-            ) = SemanticSimilarityExampleSelector.from_examples(
+            example_selector = SemanticSimilarityExampleSelector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
-                Chroma,
+                FAISS,
                 k=self._selector_k,
             )
         return FewShotPromptTemplate(
