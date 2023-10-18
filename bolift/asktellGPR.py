@@ -110,18 +110,19 @@ class AskTellGPR(AskTellFewShotTopk):
     ) -> None:
         """Tell the optimizer about a new example."""
         example_dict, inv_example = self._tell(x, y, alt_ys)
+        self.examples.append(example_dict)
         # we want to have example
         # to initialize prompts, so send it
         if not self._ready:
             self.prompt = self._setup_prompt(
-                None, self._prompt_template, self._suffix, self._prefix
+                example_dict, self._prompt_template, self._suffix, self._prefix
             )
             self.inv_prompt = self._setup_inverse_prompt(inv_example)
             self.llm = self._setup_llm(self._model, self._temperature)
             self.inv_llm = self._setup_inv_llm(self._model, self._temperature)
             self._ready = True
-
-        self.examples.append(example_dict)
+        
+        self._example_count += 1
 
         if train:
             try:
