@@ -123,11 +123,11 @@ class AskTellFewShotMulti:
         return get_llm(
             model_name=model,
             # put stop with suffix, so it doesn't start babbling
-            # stop=[
-            #     self.prompt.suffix.split()[0],
-            #     self.inv_prompt.suffix.split()[0],
-            #     "\n",
-            # ],
+            stop=[
+                self.prompt.suffix.split()[0],
+                self.inv_prompt.suffix.split()[0],
+                "\n",
+            ],
             max_tokens=256,
             temperature=0.05 if temperature is None else temperature,
         )
@@ -299,8 +299,9 @@ class AskTellFewShotMulti:
         x = self.inv_llm(query)
         if type(x) != str:
             return x.content
-        pattern = r'@@@\n([\s\S]*?)###'
-        x = [p.strip() for p in re.findall(pattern, "@@@\n"+x)]
+        # print(x)
+        # pattern = r'@@@\n([\s\S]*?)###'
+        # x = [p.strip() for p in re.findall(pattern, "@@@\n"+x)]
         return x
 
     def set_calibration_factor(self, calibration_factor):
@@ -418,7 +419,7 @@ class AskTellFewShotMulti:
             best = np.max(self._ys)
 
 
-        if self._example_count < self._k:
+        if self._example_count < 3:
             # if we don't have enough examples, create a random subpool
             # this is to avoid the model to select too similar points when the context
             # is not diverse enough
@@ -443,7 +444,7 @@ class AskTellFewShotMulti:
             # Get the most diverse examples and delete the database
             selected = example_selector.select_examples({'prompt': example})[::-1][:k]
             selected = [s['prompt'] for s in selected]
-            # example_selector.vectorstore.delete_collection()
+            # example_selector.vectorstore.delete_collection() # If we want to use Chroma
             return (
                 selected,
                 [0] * k,
@@ -454,8 +455,9 @@ class AskTellFewShotMulti:
                 possible_x_l = []
                 if inv_filter:
                     approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
-                    for i, apxi in enumerate(approx_x):
-                        possible_x_l.extend(possible_x.approx_sample(apxi, inv_filter//len(approx_x)))
+                    # for i, apxi in enumerate(approx_x):
+                    #     possible_x_l.extend(possible_x.approx_sample(apxi, inv_filter//len(approx_x)))
+                    possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter))
                 if aug_random_filter:
                     possible_x_l.extend(possible_x.sample(aug_random_filter))
             else:
@@ -476,7 +478,6 @@ class AskTellFewShotMulti:
                 possible_x_l.append(selected)
         else:
             raise ValueError("Unknown pool type")
-        
         results = self._ask(possible_x_l, best, aq_fxn, k)
         if len(results[0]) == 0 and len(possible_x_l) != 0:
             # if we have nothing, just return random one
