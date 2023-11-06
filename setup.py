@@ -23,7 +23,7 @@ setup(
         "pandas",
         "tiktoken",
     ],
-    extras_require={"gpr": ["scikit-learn", "torch", "botorch", "gpytorch"]},
+    extras_require={"gpr": ["scikit-learn", "torch", "botorch==0.9.2", "gpytorch"]},
     test_suite="tests",
     long_description=long_description,
     long_description_content_type="text/markdown",
