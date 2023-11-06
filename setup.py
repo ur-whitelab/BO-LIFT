@@ -16,8 +16,8 @@ setup(
     packages=["bolift"],
     install_requires=[
         "numpy",
-        "langchain",
-        "openai",
+        "langchain==0.0.330",
+        "openai==0.28.1",
         "faiss-cpu",
         "scipy",
         "pandas",
