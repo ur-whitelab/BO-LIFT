@@ -12,6 +12,7 @@ from .llm_model import (
 from .aqfxns import (
     probability_of_improvement,
     expected_improvement,
+    log_expected_improvement,
     upper_confidence_bound,
     greedy,
 )
@@ -389,6 +390,8 @@ class AskTellFewShotMulti:
             aq_fxn = probability_of_improvement
         elif aq_fxn == "expected_improvement":
             aq_fxn = expected_improvement
+        elif aq_fxn == "log_expected_improvement":
+            aq_fxn = log_expected_improvement
         elif aq_fxn == "upper_confidence_bound":
             aq_fxn = partial(upper_confidence_bound, _lambda=_lambda)
         elif aq_fxn == "greedy":
@@ -410,7 +413,7 @@ class AskTellFewShotMulti:
         if inv_filter+aug_random_filter < len(possible_x):
             possible_x_l = []
             if inv_filter:
-                approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
+                approx_x = self.inv_predict(best * np.random.normal(1.2, 0.05))
                 possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter))
             if aug_random_filter:
                 possible_x_l.extend(possible_x.sample(aug_random_filter))
