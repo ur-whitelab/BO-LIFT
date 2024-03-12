@@ -108,7 +108,7 @@ def get_llm(
     logit_bias={},
     **kwargs,
 ):
-    if model_name in ["gpt-4", "gpt-3.5-turbo"]:
+    if model_name in ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo-preview", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]:
         if "logprobs" in kwargs:
             # not supported
             del kwargs["logprobs"]

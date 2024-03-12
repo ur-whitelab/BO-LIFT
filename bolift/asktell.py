@@ -410,7 +410,7 @@ class AskTellFewShotMulti:
         if inv_filter+aug_random_filter < len(possible_x):
             possible_x_l = []
             if inv_filter:
-                approx_x = self.inv_predict(best * np.random.normal(1.0, 0.05))
+                approx_x = self.inv_predict(best * np.random.normal(1.2, 0.05))
                 possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter))
             if aug_random_filter:
                 possible_x_l.extend(possible_x.sample(aug_random_filter))
@@ -468,7 +468,7 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
             temperature=0.1 if temperature is None else temperature,
             model_name=model,
             top_p=1.0,
-            stop=["\n", "###", "#", "##"],
+            # stop=["\n", "###", "#", "##"],
             logit_bias={
                 "198": -100,  # new line,
                 "628": -100,  # double new line,
