@@ -1,7 +1,7 @@
 import numpy as np
 import re
-from langchain.llms import OpenAI
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import OpenAI
+from langchain_openai import ChatOpenAI
 from langchain.callbacks import get_openai_callback
 from langchain.cache import InMemoryCache
 import langchain

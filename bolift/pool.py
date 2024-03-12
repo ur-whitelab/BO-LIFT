@@ -1,8 +1,8 @@
 """utilities for building and selecting from a pool"""
 from typing import List, Any, Callable
 import numpy as np
-from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
 
 class Pool:
     """Class for sampling from pool of possible data points

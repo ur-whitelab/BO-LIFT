@@ -18,8 +18,8 @@ from .aqfxns import (
 from .pool import Pool
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
-from langchain.vectorstores import FAISS, Chroma
-from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS, Chroma
+from langchain_openai import OpenAIEmbeddings
 from langchain.prompts.example_selector import (
     MaxMarginalRelevanceExampleSelector,
     SemanticSimilarityExampleSelector,

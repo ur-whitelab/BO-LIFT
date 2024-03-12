@@ -5,8 +5,8 @@ from .asktell import AskTellFewShotTopk
 from .llm_model import GaussDist
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
-from langchain.vectorstores import Chroma
-from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstore import Chroma
+from langchain_openai import OpenAIEmbeddings
 from langchain.prompts.example_selector import SemanticSimilarityExampleSelector
 
 
