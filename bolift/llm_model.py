@@ -1,27 +1,37 @@
 import numpy as np
 import re
-from langchain_openai import OpenAI
-from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAI, ChatOpenAI
 from langchain.callbacks import get_openai_callback
 from langchain.cache import InMemoryCache
 import langchain
 from dataclasses import dataclass
 
 from langchain.schema import HumanMessage, SystemMessage
+from functools import reduce
+from typing import Union
+import warnings
 
+langchain.llm_cache = InMemoryCache()
 
-def wrap_chatllm(query_list, llm):
+def wrap_chatllm(query_list, llm, system_message=None):
+    if type(query_list) == str:
+        query_list = [query_list]
     if type(llm) == ChatOpenAI:
         system_message_prompt = SystemMessage(
-            content="You are a bot that can predict chemical and material properties. Do not explain answers, just provide numerical predictions."
+            content=system_message
         )
-        if type(query_list) == str:
-            query_list = [system_message_prompt, HumanMessage(content=query_list)]
-        else:
-            query_list = [
-                [system_message_prompt, HumanMessage(content=q)] for q in query_list
-            ]
+        query_list = [
+            [system_message_prompt, HumanMessage(content=q)] for q in query_list
+        ]
     return query_list
+
+
+def truncate(s):
+    """Truncate to first number"""
+    try:
+        return re.findall(r"[-+]?\d*\.\d+|\d+", s)[0]
+    except IndexError:
+        return s
 
 
 @dataclass
@@ -95,20 +105,41 @@ def make_dd(values, probs):
     return dd
 
 
-langchain.llm_cache = InMemoryCache()
-
-
 def get_llm(
-    model_name="text-babbage-001",
-    temperature=0.05,
-    n=1,
-    top_p=1,
-    best_of=1,
-    max_tokens=128,
-    logit_bias={},
-    **kwargs,
-):
-    if model_name in ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo-preview", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]:
+        model_name      : str,
+        temperature     : float = 0.05,
+        n               : int = 1,
+        top_p           : int = 1,
+        best_of         : int = 1,
+        max_tokens      : int = 128,
+        logit_bias      : dict ={},
+        **kwargs
+    ):
+    openai_models = ["davinci-002", "gpt-3.5-turbo-instruct"]
+    chatopenai_models = ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo-preview", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]
+    anyscale_models = ["llama", "mistral"]
+    
+    kwargs = {
+        "model_name": model_name,
+        "temperature": temperature,
+        "n": n,
+        "top_p": top_p,
+        "best_of": best_of,
+        "max_tokens": max_tokens,
+        "logit_bias": logit_bias,
+        **kwargs
+    }
+
+    if model_name in openai_models:
+        return OpenAILLM(**kwargs)
+    if model_name in chatopenai_models:
+        return ChatOpenAILLM(**kwargs)
+    if model_name in anyscale_models:
+        return AnyScaleLLM(**kwargs)
+    raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models + anyscale_models}")
+
+
+    if model_name in []:
         if "logprobs" in kwargs:
             # not supported
             del kwargs["logprobs"]
@@ -132,6 +163,185 @@ def get_llm(
     )
 
 
+class LLM:
+    def __init__(self, 
+                 model_name     : str = "gpt-3.5-turbo-instruct", 
+                 temperature    : float = 0.7, 
+                 n              : int = 1, 
+                 top_p          : int = 1, 
+                 best_of        : int = 1, 
+                 max_tokens     : int = 128, 
+                 logit_bias     : dict = {},
+                 **kwargs
+                ) -> None:
+        self.model_name = model_name
+        self.temperature = temperature
+        self.n = n
+        self.top_p = top_p
+        self.best_of = best_of
+        self.max_tokens = max_tokens
+        self.logit_bias = logit_bias
+        self.kwargs = kwargs
+        self.llm = self.create_llm()
+
+    def create_llm(self):
+        raise NotImplementedError("Must be implemented in subclasses")
+    
+    def parse_response(self, generations):
+        raise NotImplementedError("Must be implemented in subclasses")
+    
+    def parse_inv_response(self, generations):
+        raise NotImplementedError("Must be implemented in subclasses")
+    
+    def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
+        raise NotImplementedError("Must be implemented in subclasses")
+
+    
+class OpenAILLM(LLM):
+    def create_llm(self):
+        return OpenAI(
+            model_name=self.model_name,
+            temperature=self.temperature,
+            n=self.n,
+            best_of=self.best_of,
+            top_p=self.top_p,
+            logit_bias=self.logit_bias,
+            max_tokens=self.max_tokens,
+            model_kwargs=self.kwargs
+        )
+    
+    def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
+        if type(query_list) == str:
+            query_list = [query_list]
+
+        if "system_message" in kwargs:
+            del kwargs["system_message"]
+
+        with get_openai_callback() as cb:
+            completion_response = self.llm.generate(query_list, *args, **kwargs)
+            token_usage = cb.total_tokens
+        if verbose:
+            print("-" * 80)
+            print(query_list[0])
+            print("-" * 80)
+            print(query_list[0], completion_response.generations[0][0].text)
+            print("-" * 80)
+
+        results = []
+        for gens in completion_response.generations:
+            if inv_pred:
+                results.append(self.parse_inv_response(gens))
+            else:
+                results.append(self.parse_response(gens))
+        return results, token_usage
+        
+    def parse_response(self, generations):
+        values, logprobs = [], []
+        for gen in generations:
+            try:
+                v = float(truncate(gen.text))
+                values.append(v)
+            except ValueError:
+                continue
+            # can do inner sum because there is only one token
+            lp = sum(
+                [
+                    sum(reduce(lambda a, b: {**a, **b}, gen.generation_info["logprobs"]["top_logprobs"]).values())
+                ]
+            )
+            logprobs.append(lp)
+
+        probs = np.exp(np.array(logprobs))
+        probs = probs / np.sum(probs)
+        # return DiscreteDist(np.array(values), probs)
+        return make_dd(np.array(values), probs)
+
+    def parse_inv_response(self, generations):
+        return generations[0].text
+
+
+class ChatOpenAILLM(LLM):
+    def create_llm(self):
+        if "logprobs" in self.kwargs:
+            del self.kwargs["logprobs"] # not supported
+        return ChatOpenAI(
+            model_name=self.model_name,
+            temperature=self.temperature,
+            n=self.n,
+            max_tokens=self.max_tokens,
+            model_kwargs=self.kwargs,
+        )
+
+    def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
+        if type(query_list) == str:
+            query_list = [query_list]
+
+        if "system_message" in kwargs:
+            system_message = kwargs["system_message"]
+            del kwargs["system_message"]
+        else:
+            system_message = ""
+            warnings.warn("`system_message` not provided. Not clearly specifying the task for the LLM usually decreases its performance considerably. Please provide a system_message for ChatOpenAI models when invoking the `predict` method.")
+
+        system_message_prompt = SystemMessage(
+            content=system_message
+        )
+        query_list = [
+            [system_message_prompt, HumanMessage(content=q)] for q in query_list
+        ]
+        
+        with get_openai_callback() as cb:
+            completion_response = self.llm.generate(query_list, *args, **kwargs)
+            token_usage = cb.total_tokens
+        if verbose:
+            print("-" * 80)
+            print(query_list[0])
+            print("-" * 80)
+            print(query_list[0], completion_response.generations[0][0].text)
+            print("-" * 80)
+
+        results = []
+        for gens in completion_response.generations:
+            if inv_pred:
+                results.append(self.parse_inv_response(gens))
+            else:
+                results.append(self.parse_response(gens))
+        return results, token_usage
+        
+
+    def parse_response(self, generations):
+        values = []
+        for gen in generations:
+            try:
+                v = float(truncate(gen.text))
+                values.append(v)
+            except ValueError:
+                continue
+
+        probs = [1 / len(values) for _ in values]
+        # return DiscreteDist(np.array(values), probs)
+        return make_dd(np.array(values), probs)
+    
+    def parse_inv_response(self, generations):
+        return generations[0].text
+   
+
+class AnyScaleLLM(LLM):
+    # TODO: Implement AnyScaleLLM
+    def create_llm(self):
+        ...
+
+    def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
+        ...
+
+    def parse_response(self, generations):
+        ...
+    
+    def parse_inv_response(self, generations):
+        ...
+
+
+# TODO: Clean up the following code
 def parse_response(generation, prompt, llm):
     # first parse the options into numbers
     text = generation.text
@@ -174,22 +384,12 @@ def parse_response(generation, prompt, llm):
     # return DiscreteDist(np.array([k for k, v in result]), probs)
     return make_dd(np.array([k for k, v in result]), probs)
 
-
-def truncate(s):
-    """Truncate to first number"""
-    try:
-        return re.findall(r"[-+]?\d*\.\d+|\d+", s)[0]
-    except IndexError:
-        return s
-
-
 def remove_overlap(s1, s2, check_l=10):
     """There may be some of s1 in s2. Remove it and return rest of s2"""
     for i in range(check_l, 0, -1):
         if s1[-i:] == s2[:i]:
             return s2[len(s1[-i:]) :]
     return s2
-
 
 def parse_response_topk(generations):
     values, logprobs = [], []
@@ -202,8 +402,7 @@ def parse_response_topk(generations):
         # can do inner sum because there is only one token
         lp = sum(
             [
-                sum(x.to_dict().values())
-                for x in gen.generation_info["logprobs"]["top_logprobs"]
+                sum(reduce(lambda a, b: {**a, **b}, gen.generation_info["logprobs"]["top_logprobs"]).values())
             ]
         )
         logprobs.append(lp)
@@ -212,7 +411,6 @@ def parse_response_topk(generations):
     probs = probs / np.sum(probs)
     # return DiscreteDist(np.array(values), probs)
     return make_dd(np.array(values), probs)
-
 
 def parse_response_n(generations):
     values = []
@@ -226,7 +424,6 @@ def parse_response_n(generations):
     probs = [1 / len(values) for _ in values]
     # return DiscreteDist(np.array(values), probs)
     return make_dd(np.array(values), probs)
-
 
 def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
     """Predict the output numbers for a given list of queries"""
@@ -244,10 +441,12 @@ def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
         results.append(parse_response(gen[0], q, llm))
     return results, token_usage
 
-
 def openai_topk_predict(query_list, llm, verbose, *args, **kwargs):
     """Predict the output numbers for a given list of queries"""
-    query_list = wrap_chatllm(query_list, llm)
+    query_list = wrap_chatllm(query_list, 
+                              llm, 
+                              system_message="You are a bot that can predict chemical and material properties. Do not explain answers, just provide numerical predictions."
+                            )
     with get_openai_callback() as cb:
         completion_response = llm.generate(query_list, *args, **kwargs)
         token_usage = cb.total_tokens

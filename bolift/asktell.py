@@ -7,7 +7,6 @@ from .llm_model import (
     openai_topk_predict,
     DiscreteDist,
     GaussDist,
-    wrap_chatllm,
 )
 from .aqfxns import (
     probability_of_improvement,
@@ -26,6 +25,9 @@ from langchain.prompts.example_selector import (
 )
 
 _answer_choices = ["A", "B", "C", "D", "E"]
+
+from langchain_openai import ChatOpenAI
+from langchain.schema import HumanMessage, SystemMessage
 
 
 class QuantileTransformer:
@@ -124,7 +126,7 @@ class AskTellFewShotMulti:
                 self.inv_prompt.suffix.split()[0],
                 # "\n",
             ],
-            max_tokens=256,
+            max_tokens=512,
             temperature=0.05 if temperature is None else temperature,
         )
 
@@ -196,9 +198,7 @@ class AskTellFewShotMulti:
                 raise ValueError("Cannot do zero-shot with selector")
             
             sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
-            example_selector = (
-                example_selector
-            ) = sim_selector.from_examples(
+            example_selector = sim_selector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
                 FAISS,
@@ -289,11 +289,11 @@ class AskTellFewShotMulti:
         query = self.inv_prompt.format(
             y=self.format_y(y), y_name=self._y_name, x_name=self._x_name
         )
-        query = wrap_chatllm(query, self.inv_llm)
-        x = self.inv_llm(query)
-        if type(x) != str:
-            return x.content
-        return x
+        x, tokens = self.inv_llm.predict(
+            query,
+            inv_pred=True,
+            system_message="You are a bot who can propose experimental procedures given a numerical C2 yield. Do not explain answers, just provide experimental procedures")
+        return x[0]
 
     def set_calibration_factor(self, calibration_factor):
         self._calibration_factor = calibration_factor
@@ -329,7 +329,10 @@ class AskTellFewShotMulti:
             )
             for x_i in x
         ]
-        results, tokens = self._predict(queries)
+        results, tokens = self.llm.predict(
+            queries,
+            system_message = "You are a bot that can predict chemical and material properties. Do not explain answers, just provide numerical predictions."
+        )
         self.tokens_used += tokens
 
         # need to replace any GaussDist with pop std
@@ -369,9 +372,7 @@ class AskTellFewShotMulti:
     ) -> Tuple[List[str], List[float], List[float]]:
         """Ask the optimizer for the next x to try.
 
-
-
-        Args:
+            Args:
             possible_x: List of possible x values to choose from.
             aq_fxn: Acquisition function to use.
             k: Number of x values to return.
@@ -513,24 +514,13 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            if not self.cos_sim:
-                example_selector = (
-                    example_selector
-                ) = MaxMarginalRelevanceExampleSelector.from_examples(
-                    [example],
-                    OpenAIEmbeddings(),
-                    FAISS,
-                    k=self._selector_k,
-                )
-            else:
-                example_selector = (
-                    example_selector
-                ) = SemanticSimilarityExampleSelector.from_examples(
-                    [example],
-                    OpenAIEmbeddings(),
-                    Chroma,
-                    k=self._selector_k,
-                )
+            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
+            example_selector = sim_selector.from_examples(
+                [example],
+                OpenAIEmbeddings(),
+                FAISS,
+                k=self._selector_k,
+            )
         return FewShotPromptTemplate(
             examples=examples if example_selector is None else None,
             example_prompt=prompt_template,
