@@ -10,7 +10,7 @@ from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.optim.fit import fit_gpytorch_torch
 import torch
-from langchain.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from sklearn.manifold import Isomap
 
 

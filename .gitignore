@@ -9,6 +9,7 @@ __pycache__/
 *.so
 
 .vscode
+paper/
 
 # Distribution / packaging
 .Python
