@@ -352,8 +352,9 @@ Mn–MoOx/SiO2      Mn(NO3)2·6H2O, (NH4)2MoO4      SiO2                        
 Mn–Na/SiO2        Mn(NO3)2·6H2O, NaNO3           SiO2                              Mn (50)   Na (50)   —
 WOx/SiO2          (NH4)10H2(W2O7)6                SiO2                              —         —         —         W (100)
 Na/SiO2           NaNO3                            SiO2                              —         Na (100) —         —
-Your experimental procedures can only use those parameters. This is more information to help control how you output these procedures: The metal loadings to a unit gram of support were fixed at 0.371 mmol for Metal 1, 0.370 or 0.185 mmol for Metal 2 (depending on the valence), and 0.185 mmol for Metal 3. The values in parentheses need to correspond to relative atomic percentages of M1–M3: to a unit gram of the support, only choose from, 0.371 mmol M1, 0.370 or 0.185 mmol M2, and 0.185 mmol M3 or 0.0. Use the exact format of the given examples when responding, given a property like C2 yield.""")
 
+Your experimental procedures can only use those parameters. This is more information to help control how you output these procedures: The metal loadings to a unit gram of support were fixed at 0.371 mmol for Metal 1, 0.370 or 0.185 mmol for Metal 2 (depending on the valence), and 0.185 mmol for Metal 3. The values in parentheses need to correspond to relative atomic percentages of M1–M3: to a unit gram of the support, only choose from, 0.371 mmol M1, 0.370 or 0.185 mmol M2, and 0.185 mmol M3 or 0.0. Use the exact format of the given examples when responding, given a property like C2 yield.
+""")
         return x[0]
 
     def set_calibration_factor(self, calibration_factor):
@@ -366,7 +367,6 @@ Your experimental procedures can only use those parameters. This is more informa
             x: The x value(s) to predict.
         Returns:
             The probability distribution and values for the given x.
-
         """
         if not isinstance(x, list):
             x = [x]
@@ -441,6 +441,7 @@ Your experimental procedures can only use those parameters. This is more informa
             inv_filter: Reduce pool size to this number with inverse model. If 0, not used
             aug_random_filter: Add this man y random examples to the pool to increase diversity after reducing pool with inverse model
             _lambda: Lambda value to use for UCB
+            lambda_mult: control MMR diversity ,0-1 lower = more diverse
         Return:
             The selected x values, their acquisition function values, and the predicted y modes.
             Sorted by acquisition function value (descending)
@@ -475,6 +476,7 @@ Your experimental procedures can only use those parameters. This is more informa
             if inv_filter:
                 approx_x = self.inv_predict(best * np.random.normal(1.2, 0.05))
                 possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter, lambda_mult=lambda_mult))
+
             if aug_random_filter:
                 possible_x_l.extend(possible_x.sample(aug_random_filter))
         else:
@@ -488,6 +490,7 @@ Your experimental procedures can only use those parameters. This is more informa
                 [0] * k,
                 [0] * k,
             )
+        # print("ask results:",results)
         return results
 
     def _ask(
@@ -501,6 +504,7 @@ Your experimental procedures can only use those parameters. This is more informa
         aq_vals = [aq_fxn(r, best) for r in results]
         selected = np.argsort(aq_vals)[::-1][:k]
         means = [r.mean() for r in results]
+       
         return (
             [possible_x[i] for i in selected],
             [aq_vals[i] for i in selected],

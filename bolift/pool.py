@@ -47,6 +47,7 @@ class Pool:
 
     def approx_sample(self, x: str, k: int, lambda_mult: float = 0.5) -> None:
         """Given an approximation of x, return k similar"""
+        
         # want to select extra, then remove previously chosen
         _k = k + len(self._selected)
         docs = self._db.max_marginal_relevance_search(x, k=_k, fetch_k=5 * _k, lambda_mult=lambda_mult)
