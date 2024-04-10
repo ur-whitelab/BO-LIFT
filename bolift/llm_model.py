@@ -140,33 +140,7 @@ def get_llm(
         return AnyScaleLLM(**kwargs)
     raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models + anyscale_models}")
 
-
-    # if model_name in []:
-    #     if "logprobs" in kwargs:
-    #         # not supported
-    #         del kwargs["logprobs"]
-    #     return ChatOpenAI(
-    #         model_name=model_name,
-    #         temperature=temperature,
-    #         n=n,
-    #         model_kwargs=kwargs,
-    #         max_tokens=max_tokens,
-    #     )
-
-    # return OpenAI(
-    #     model_name=model_name,
-    #     temperature=temperature,
-    #     n=n,
-    #     best_of=best_of,
-    #     top_p=top_p,
-    #     logit_bias=logit_bias,
-    #     model_kwargs=kwargs,
-    #     max_tokens=max_tokens,
-    # )
-
-
 class LLM:
-    
     def __init__(self, 
                  model_name     : str = "gpt-3.5-turbo-instruct", 
                  temperature    : float = 0.7, 
@@ -271,11 +245,10 @@ class ChatOpenAILLM(LLM):
     def create_llm(self):
         if "logprobs" in self.kwargs:
             del self.kwargs["logprobs"] # not supported
+
         return ChatOpenAI(
             model_name=self.model_name,
             temperature=self.temperature,
-
-
             n=self.n,
             max_tokens=self.max_tokens,
             model_kwargs=self.kwargs,
@@ -298,7 +271,6 @@ class ChatOpenAILLM(LLM):
         query_list = [
             [system_message_prompt, HumanMessage(content=q)] for q in query_list
         ]
-        # print(query_list) # addition
         
         with get_openai_callback() as cb:
             completion_response = self.llm.generate(query_list, *args, **kwargs)
@@ -341,7 +313,7 @@ class AnyScaleLLM(LLM):
     def create_llm(self, query_list):
         if type(query_list) == str:
             query_list=[query_list]
-
+            
         if "system_message" in kwargs:
             system_message = kwargs["system_message"]
             del kwargs["system_message"]
@@ -382,15 +354,21 @@ class AnyScaleLLM(LLM):
                 results.append(self.parse_response(gens))
         return results, token_usage
 
-                                              
-        #return response.choices[0].message
-
     def parse_response(self, generations):
-        ...
+        values = []
+        for gen in generations:
+            try:
+                v = float(truncate(gen.text))
+                values.append(v)
+            except ValueError:
+                continue
+
+        probs = [1 / len(values) for _ in values]
+        # return DiscreteDist(np.array(values), probs)
+        return make_dd(np.array(values), probs)
     
     def parse_inv_response(self, generations):
-        ...
-
+        return generations[0].text
 
 # TODO: Clean up the following code
 def parse_response(generation, prompt, llm):

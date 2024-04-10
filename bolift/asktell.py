@@ -52,7 +52,7 @@ class AskTellFewShotMulti:
         self,
         prompt_template: PromptTemplate = None,
         suffix: Optional[str] = None,
-        model: str = "text-curie-001",
+        model: str = "gpt-3.5-turbo",
         temperature: Optional[float] = None,
         prefix: Optional[str] = None,
         x_formatter: Callable[[str], str] = lambda x: x,
@@ -64,7 +64,7 @@ class AskTellFewShotMulti:
         use_quantiles: bool = False,
         n_quantiles: int = 100,
         verbose: bool = False,
-        cos_sim: bool = False,
+        cos_sim: bool = True,
     ) -> None:
         """Initialize Ask-Tell optimizer.
 
@@ -145,10 +145,8 @@ class AskTellFewShotMulti:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
             
-            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
-            example_selector = (
-                example_selector
-            ) = sim_selector.from_examples(
+            sim_selector = SemanticSimilarityExampleSelector #if self.cos_sim else MaxMarginalRelevanceExampleSelector
+            example_selector = sim_selector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
                 FAISS,
@@ -292,12 +290,7 @@ class AskTellFewShotMulti:
         x, tokens = self.inv_llm.predict(
             query,
             inv_pred=True,
-            # system_message="Hello, as an expert in heterogeneous catalysis, you are endowed with a profound understanding of the electronic properties of elements and how they synergize to catalyze reactions efficiently and effectively. Your skill set is particularly adept at crafting experimental procedures that are finely tuned to achieve specific numerical C2 yields. Your capabilities are built on the most current and comprehensive information available, up to April 2023. When addressing inquiries, it's important to concentrate on delivering experimental procedures that are tailored to the details provided about C2 yields. Ensure not to include explanations; your forte lies in offering direct procedural guidance. Our aim is to accurately respond to each query only with clear experimental procedures that match the format of user examples to find the best experimental procedure for the process.") - last tried, works well 
-            
-            # system_message = "You are an expert in heterogeneous catalysis, with deep knowledge of the electronic properties of elements, especially how transition metals interact with various supports to synergistically catalyze reactions under different conditions. Your expertise extends to designing experimental procedures aimed at achieving desired material properties. Your capabilities are built on the most current and comprehensive information available, up to April 2023. When responding to inquiries, please focus on providing specific experimental procedures, without including explanations. Your approach should reflect a balanced integration of user-provided information and your base knowledge to identify the most impactful experimental strategies for their needs. Our goal is to deliver clear and direct procedural guidance, ENSURING that we match the user's example formats when responding, to identify the most effective experimental procedure for their needs.") - have not tried, but best
-        
-            
-            system_message = """You are an expert in heterogeneous catalysis, with deep knowledge of the electronic properties of elements, especially how transition metals interact with various supports to synergistically catalyze reactions under different conditions. Your expertise extends to designing experimental procedures aimed at achieving desired material properties. Your capabilities are built on the most current and comprehensive information available, up to September 2021. When responding to inquiries, please focus on providing specific experimental procedures, without including explanations. Your approach should reflect a balanced integration of user-provided information and your base knowledge to identify the most impactful experimental strategies for their needs. Our goal is to deliver clear and direct procedural guidance, ENSURING that we match the user's example formats when responding, to identify the most effective experimental procedure for their needs. 
+            system_message="""You are an expert in heterogeneous catalysis, with deep knowledge of the electronic properties of elements, especially how transition metals interact with various supports to synergistically catalyze reactions under different conditions. Your expertise extends to designing experimental procedures aimed at achieving desired material properties. Your capabilities are built on the most current and comprehensive information available, up to April 2023. When responding to inquiries, please focus on providing specific experimental procedures, without including explanations. Your approach should reflect a balanced integration of user-provided information and your base knowledge to identify the most impactful experimental strategies for their needs. Our goal is to deliver clear and direct procedural guidance, ENSURING that we match the user's example formats when responding, to identify the most effective experimental procedure for their needs. 
             These are the possible parameters that can be input:
 catalyst       name                              precursor                         support    M1b       M2b       M3b
 Mn–Na2WO4/BN   Mn(NO3)2·6H2O, Na2WO4            BN                                Mn (40)   Na (40)   W (20)
@@ -359,45 +352,9 @@ Mn–MoOx/SiO2      Mn(NO3)2·6H2O, (NH4)2MoO4      SiO2                        
 Mn–Na/SiO2        Mn(NO3)2·6H2O, NaNO3           SiO2                              Mn (50)   Na (50)   —
 WOx/SiO2          (NH4)10H2(W2O7)6                SiO2                              —         —         —         W (100)
 Na/SiO2           NaNO3                            SiO2                              —         Na (100) —         —
+
 Your experimental procedures can only use those parameters. This is more information to help control how you output these procedures: The metal loadings to a unit gram of support were fixed at 0.371 mmol for Metal 1, 0.370 or 0.185 mmol for Metal 2 (depending on the valence), and 0.185 mmol for Metal 3. The values in parentheses need to correspond to relative atomic percentages of M1–M3: to a unit gram of the support, only choose from, 0.371 mmol M1, 0.370 or 0.185 mmol M2, and 0.185 mmol M3 or 0.0. Use the exact format of the given examples when responding, given a property like C2 yield.
 """)
-
-#         system_message = """You are an expert in heterogeneous catalysis, with deep knowledge of the electronic properties of elements, especially how transition metals interact with various supports to synergistically catalyze reactions under different conditions. Your expertise extends to designing experimental procedures aimed at achieving desired material properties. Your capabilities are built on the most current and comprehensive information available, up to September 2021. When responding to inquiries, please focus on providing specific experimental procedures, without including explanations. Your approach should reflect a balanced integration of user-provided information and your base knowledge to identify the most impactful experimental strategies for their needs. Our goal is to deliver clear and direct procedural guidance, ENSURING that we match the user's example formats when responding, to identify the most effective experimental procedure for their needs. 
-#             These are the possible parameters that can be input into your suggested experimental procedures:
-# support | M1  | M2  | M3  | CH4/02 (Mol/Mol) | Total (mL/min) | P Ar | Temp. (C)
-# --------------------------------------------------------------------------------
-# MgO     | Li  | K   | Mn  | 2                 | 10             | 0.15 | 800
-# Al2O3   | Na  | Fe  | Tb  | 6                 | 20             | 0.4  | 850
-# A2O3    | Mg  | Na  | Hf  | 4                 | 15             | 0.7  | 900
-# A1203   | Ca  | Ni  | None| -                 | -              | 0.0  | 750
-# SiO2    | Ti  | Ce  | Y   | -                 | -              | -    | 700
-# CaO     | V   | Tb  | Zn  | -                 | -              | -    | -
-# TiO2    | Fe  | E   | Eu  | -                 | -              | -    | -
-# ZrO2    | Co  | Ca  | La  | -                 | -              | -    | -
-# BaO     | Ni  | Mn  | Cs  | -                 | -              | -    | -
-# La2O3   | Y   | Zn  | Ba  | -                 | -              | -    | -
-# CeO2    | Mo  | Nd  | Ni  | -                 | -              | -    | -
-# -       | K   | Zr  | Pd  | -                 | -              | -    | -
-# -       | Cu  | V   | W   | -                 | -              | -    | -
-# -       | Zn  | Mo  | Nd  | -                 | -              | -    | -
-# -       | Sr  | Y   | Sr  | -                 | -              | -    | -
-# -       | Zr  | La  | Ce  | -                 | -              | -    | -
-# -       | Ba  | Cs  | Cu  | -                 | -              | -    | -
-# -       | Mn  | Mg  | Mo  | -                 | -              | -    | -
-# -       | Cs  | Ti  | Zr  | -                 | -              | -    | -
-# -       | La  | Hf  | Co  | -                 | -              | -    | -
-# -       | Ce  | Co  | V   | -                 | -              | -    | -
-# -       | Mg  | Cu  | Ca  | -                 | -              | -    | -
-# -       | Pd  | Pd  | Fe  | -                 | -              | -    | -
-# -       | Zo  | Ba  | -   | -                 | -              | -    | -
-# -       | Tb  | Sr  | -   | -                 | -              | -    | -
-# -       | Mn  | W   | -   | -                 | -              | -    | -
-# -       | Fe  | None| -   | -                 | -              | -    | -
-# -       | Eu  | -   | -   | -                 | -              | -    | -
-
-# Your experimental procedures can only use those parameters. Always use the exact format of the given examples when responding, given a property like C2 yield.
-# """)
-
         return x[0]
 
     def set_calibration_factor(self, calibration_factor):
@@ -410,7 +367,6 @@ Your experimental procedures can only use those parameters. This is more informa
             x: The x value(s) to predict.
         Returns:
             The probability distribution and values for the given x.
-
         """
         if not isinstance(x, list):
             x = [x]
@@ -421,7 +377,7 @@ Your experimental procedures can only use those parameters. This is more informa
             )
             self.inv_prompt = self._setup_inverse_prompt(None)
             self.llm = self._setup_llm(self._model)
-            self._ready = True
+            self._ready = True 
 
         if self._selector_k is not None:
             # have to update this until my PR is merged
@@ -436,10 +392,7 @@ Your experimental procedures can only use those parameters. This is more informa
         ]
         results, tokens = self.llm.predict(
             queries,
-
-            # system_message = "You are a bot that can accurately predict chemical and material properties from their synthesis and experimental procedures. Do not explain answers, just provide numerical predictions."
-
-            system_message = "You are an expert in heterogeneous catalysis, with deep knowledge of the electronic properties of elements, especially how transition metals interact with various supports to synergistically catalyze reactions under different conditions. You expertise extends to accurately predicting chemical and material properties from understanding their synthesis and experimental procedures. Your capabilities are built on the most current and comprehensive information available, up to April 2023. Your approach should reflect a balanced integration of user-provided information and your base knowledge to identify corresponding chemical property. Do not explain answers, just provide numerical predictions."
+            system_message = "You are a bot that can accurately predict chemical and material properties from their synthesis and experimental procedures. Do not explain answers, just provide numerical predictions."
         )
         self.tokens_used += tokens
 
@@ -476,6 +429,7 @@ Your experimental procedures can only use those parameters. This is more informa
         k: int = 1,
         inv_filter: int = 16,
         aug_random_filter: int = 0,
+        lambda_mult: float = 0.5,
         _lambda: float = 0.5,
         lambda_mult: float = None,
     ) -> Tuple[List[str], List[float], List[float]]:
@@ -521,10 +475,8 @@ Your experimental procedures can only use those parameters. This is more informa
         if inv_filter+aug_random_filter < len(possible_x):
             possible_x_l = []
             if inv_filter:
-                
-                approx_x = self.inv_predict(best* np.random.normal(1.2, 0.05))
-
-                possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter,lambda_mult = lambda_mult))
+                approx_x = self.inv_predict(best * np.random.normal(1.2, 0.05))
+                possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter, lambda_mult=lambda_mult))
 
             if aug_random_filter:
                 possible_x_l.extend(possible_x.sample(aug_random_filter))
