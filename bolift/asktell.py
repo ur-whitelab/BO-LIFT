@@ -431,7 +431,6 @@ Your experimental procedures can only use those parameters. This is more informa
         aug_random_filter: int = 0,
         lambda_mult: float = 0.5,
         _lambda: float = 0.5,
-        lambda_mult: float = None,
     ) -> Tuple[List[str], List[float], List[float]]:
         """Ask the optimizer for the next x to try.
 
