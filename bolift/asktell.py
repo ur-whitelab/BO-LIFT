@@ -353,6 +353,7 @@ Mn–Na/SiO2        Mn(NO3)2·6H2O, NaNO3           SiO2                        
 WOx/SiO2          (NH4)10H2(W2O7)6                SiO2                              —         —         —         W (100)
 Na/SiO2           NaNO3                            SiO2                              —         Na (100) —         —
 Your experimental procedures can only use those parameters. This is more information to help control how you output these procedures: The metal loadings to a unit gram of support were fixed at 0.371 mmol for Metal 1, 0.370 or 0.185 mmol for Metal 2 (depending on the valence), and 0.185 mmol for Metal 3. The values in parentheses need to correspond to relative atomic percentages of M1–M3: to a unit gram of the support, only choose from, 0.371 mmol M1, 0.370 or 0.185 mmol M2, and 0.185 mmol M3 or 0.0. Use the exact format of the given examples when responding, given a property like C2 yield.""")
+
         return x[0]
 
     def set_calibration_factor(self, calibration_factor):
