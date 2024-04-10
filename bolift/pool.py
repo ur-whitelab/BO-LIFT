@@ -1,6 +1,7 @@
 """utilities for building and selecting from a pool"""
 from typing import List, Any, Callable
 import numpy as np
+import openai
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
@@ -45,16 +46,31 @@ class Pool:
         self._selected.append(x)
         self._available.remove(x)
 
-    def approx_sample(self, x: str, k: int) -> None:
+    def approx_sample(self, x: str, k: int, lambda_mult: float=.5) -> None:
         """Given an approximation of x, return k similar"""
         # want to select extra, then remove previously chosen
         _k = k + len(self._selected)
-        docs = self._db.max_marginal_relevance_search(x, k=_k, fetch_k=5 * _k)
+        docs = self._db.max_marginal_relevance_search(x, k=_k, fetch_k=5 * _k, lambda_mult=lambda_mult)
         docs = [d.metadata["data"] for d in docs]
         # remove previously chosen
         docs = [d for d in docs if d not in self._selected]
         # select k
         return docs[:k]
+    
+    # def approx_sample_lambda(self, x: str, k: int, lambda_multi: float = .5, model: str ="text-embedding-ada-002") -> None:
+    #     """Given an approximation of x, return k similar with control of diversity level using lambda_multi parameter"""
+
+    #     # x = openai.Embedding.create(input=x, model=model)['data'][0]['embedding']
+    #     #     # return np.array(embedding)
+    #     embeddings = OpenAIEmbeddings(model=model)
+    #     x = embeddings.embed_query(x)
+    #     _k = k + len(self._selected)
+    #     docs = self._db.amax_marginal_relevance_search_by_vector(x, k=_k, fetch_k=5 * _k, lambda_multi = lambda_multi)
+    #     docs = [d.metadata["data"] for d in docs]
+    #     # remove previously chosen
+    #     docs = [d for d in docs if d not in self._selected]
+    #     # select k
+    #     return docs[:k]
 
     def reset(self) -> None:
         """Reset the pool"""

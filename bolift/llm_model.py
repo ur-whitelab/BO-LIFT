@@ -1,5 +1,7 @@
 import numpy as np
+import os
 import re
+import openai
 from langchain_openai import OpenAI, ChatOpenAI
 from langchain.callbacks import get_openai_callback
 from langchain.cache import InMemoryCache
@@ -107,7 +109,7 @@ def make_dd(values, probs):
 
 def get_llm(
         model_name      : str,
-        temperature     : float = 0.05,
+        temperature     : float = 0.7,
         n               : int = 1,
         top_p           : int = 1,
         best_of         : int = 1,
@@ -117,7 +119,7 @@ def get_llm(
     ):
     openai_models = ["davinci-002", "gpt-3.5-turbo-instruct"]
     chatopenai_models = ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo-preview", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]
-    anyscale_models = ["llama", "mistral"]
+    anyscale_models = ["meta-llama/Llama-2-7b-chat-hf","meta-llama/Llama-2-13b-chat-hf","meta-llama/Llama-2-70b-chat-hf", "mistralai/Mistral-7B-Instruct-v0.1", "mistralai/Mixtral-8x7B-Instruct-v0.1"]
     
     kwargs = {
         "model_name": model_name,
@@ -139,31 +141,32 @@ def get_llm(
     raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models + anyscale_models}")
 
 
-    if model_name in []:
-        if "logprobs" in kwargs:
-            # not supported
-            del kwargs["logprobs"]
-        return ChatOpenAI(
-            model_name=model_name,
-            temperature=temperature,
-            n=n,
-            model_kwargs=kwargs,
-            max_tokens=max_tokens,
-        )
+    # if model_name in []:
+    #     if "logprobs" in kwargs:
+    #         # not supported
+    #         del kwargs["logprobs"]
+    #     return ChatOpenAI(
+    #         model_name=model_name,
+    #         temperature=temperature,
+    #         n=n,
+    #         model_kwargs=kwargs,
+    #         max_tokens=max_tokens,
+    #     )
 
-    return OpenAI(
-        model_name=model_name,
-        temperature=temperature,
-        n=n,
-        best_of=best_of,
-        top_p=top_p,
-        logit_bias=logit_bias,
-        model_kwargs=kwargs,
-        max_tokens=max_tokens,
-    )
+    # return OpenAI(
+    #     model_name=model_name,
+    #     temperature=temperature,
+    #     n=n,
+    #     best_of=best_of,
+    #     top_p=top_p,
+    #     logit_bias=logit_bias,
+    #     model_kwargs=kwargs,
+    #     max_tokens=max_tokens,
+    # )
 
 
 class LLM:
+    
     def __init__(self, 
                  model_name     : str = "gpt-3.5-turbo-instruct", 
                  temperature    : float = 0.7, 
@@ -172,6 +175,8 @@ class LLM:
                  best_of        : int = 1, 
                  max_tokens     : int = 128, 
                  logit_bias     : dict = {},
+                 logprobs       : bool = True,
+                 top_logprobs   : int = 5,
                  **kwargs
                 ) -> None:
         self.model_name = model_name
@@ -181,6 +186,8 @@ class LLM:
         self.best_of = best_of
         self.max_tokens = max_tokens
         self.logit_bias = logit_bias
+        self.logprobs = logprobs
+        self.top_logprobs = top_logprobs
         self.kwargs = kwargs
         self.llm = self.create_llm()
 
@@ -267,6 +274,8 @@ class ChatOpenAILLM(LLM):
         return ChatOpenAI(
             model_name=self.model_name,
             temperature=self.temperature,
+
+
             n=self.n,
             max_tokens=self.max_tokens,
             model_kwargs=self.kwargs,
@@ -289,6 +298,7 @@ class ChatOpenAILLM(LLM):
         query_list = [
             [system_message_prompt, HumanMessage(content=q)] for q in query_list
         ]
+        # print(query_list) # addition
         
         with get_openai_callback() as cb:
             completion_response = self.llm.generate(query_list, *args, **kwargs)
@@ -328,11 +338,52 @@ class ChatOpenAILLM(LLM):
 
 class AnyScaleLLM(LLM):
     # TODO: Implement AnyScaleLLM
-    def create_llm(self):
-        ...
+    def create_llm(self, query_list):
+        if type(query_list) == str:
+            query_list=[query_list]
 
-    def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
-        ...
+        if "system_message" in kwargs:
+            system_message = kwargs["system_message"]
+            del kwargs["system_message"]
+        else:
+            system_message = ""
+            warnings.warn("`system_message` not provided. Not clearly specifying the task for the LLM usually decreases its performance considerably. Please provide a system_message for ChatOpenAI models when invoking the `predict` method.")
+
+        #anyscale keys
+        client = openai.OpenAI(api_key = os.environ['OPENAI_API_KEY'],
+                        base_url = os.environ['OPENAI_BASE_URL'])
+        
+        chat_completion= client.chat.completions.create(model=self.model_name,
+                                            temperature=self.temperature,
+                                            logprobs=self.logprobs,
+                                            top_logprobs=self.top_logprobs,
+                                            model_kwargs=self.kwargs,
+                                            messages=[{"role": "system", "content": system_message},
+                                                               {"role": "user", "content": query_list}])
+        return chat_completion
+
+    def predict(self, chat_completion, inv_pred=False, verbose=False, *args, **kwargs):
+
+        for message in chat_completion:
+            print(message.choices[0].delta.content, end="", flush=True)
+    
+        if verbose:
+            print("-" * 80)
+            print(query_list[0])
+            print("-" * 80)
+            print(query_list[0], chat_completion_response.generations[0][0].text)
+            print("-" * 80)
+
+        results = []
+        for gens in completion_response.generations:
+            if inv_pred:
+                results.append(self.parse_inv_response(gens))
+            else:
+                results.append(self.parse_response(gens))
+        return results, token_usage
+
+                                              
+        #return response.choices[0].message
 
     def parse_response(self, generations):
         ...
