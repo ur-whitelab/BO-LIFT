@@ -8,8 +8,12 @@ __pycache__/
 # C extensions
 *.so
 
+# Local files
+IBMPlexMono-Regular.ttf
 .vscode
+.DS_Store
 paper/
+*.ipynb
 
 # Distribution / packaging
 .Python
