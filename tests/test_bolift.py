@@ -1,10 +1,11 @@
-from bolift import llm_model
 import bolift
+from bolift import llm_model
 import numpy as np
 import pytest
 
-np.random.seed(0)
+from langchain.schema import HumanMessage, SystemMessage
 
+np.random.seed(0)
 
 def test_completion():
     llm = llm_model.get_llm(stop=["\n\n"])
