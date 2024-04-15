@@ -3,7 +3,7 @@ import os
 import re
 import openai
 from langchain_openai import OpenAI, ChatOpenAI
-from langchain.callbacks import get_openai_callback
+from langchain_community.callbacks import get_openai_callback
 from langchain.cache import InMemoryCache
 import langchain
 from dataclasses import dataclass
@@ -108,13 +108,13 @@ def make_dd(values, probs):
 
 
 def get_llm(
-        model_name      : str,
+        model_name      : str   = "gpt-3.5-turbo",
         temperature     : float = 0.7,
-        n               : int = 1,
-        top_p           : int = 1,
-        best_of         : int = 1,
-        max_tokens      : int = 128,
-        logit_bias      : dict ={},
+        n               : int   = 1,
+        top_p           : int   = 1,
+        best_of         : int   = 1,
+        max_tokens      : int   = 128,
+        logit_bias      : dict  = {},
         **kwargs
     ):
     openai_models = ["davinci-002", "gpt-3.5-turbo-instruct"]
@@ -369,6 +369,7 @@ class AnyScaleLLM(LLM):
     
     def parse_inv_response(self, generations):
         return generations[0].text
+
 
 # TODO: Clean up the following code
 def parse_response(generation, prompt, llm):
