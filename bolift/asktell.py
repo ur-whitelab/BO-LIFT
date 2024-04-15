@@ -24,6 +24,8 @@ from langchain.prompts.example_selector import (
     SemanticSimilarityExampleSelector,
 )
 
+import warnings
+
 _answer_choices = ["A", "B", "C", "D", "E"]
 
 from langchain_openai import ChatOpenAI
@@ -50,21 +52,21 @@ class QuantileTransformer:
 class AskTellFewShotMulti:
     def __init__(
         self,
-        prompt_template: PromptTemplate = None,
-        suffix: Optional[str] = None,
-        model: str = "gpt-3.5-turbo",
-        temperature: Optional[float] = None,
-        prefix: Optional[str] = None,
-        x_formatter: Callable[[str], str] = lambda x: x,
+        prompt_template: PromptTemplate     = None,
+        suffix: Optional[str]               = None,
+        model: str                          = "gpt-3.5-turbo",
+        temperature: Optional[float]        = None,
+        prefix: Optional[str]               = None,
+        x_formatter: Callable[[str], str]   = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
-        y_name: str = "output",
-        x_name: str = "input",
-        selector_k: Optional[int] = None,
-        k: int = 5,
-        use_quantiles: bool = False,
-        n_quantiles: int = 100,
-        verbose: bool = False,
-        cos_sim: bool = True,
+        y_name: str                         = "output",
+        x_name: str                         = "input",
+        selector_k: Optional[int]           = None,
+        k: int                              = 5,
+        use_quantiles: bool                 = False,
+        n_quantiles: int                    = 100,
+        verbose: bool                       = False,
+        cos_sim: bool                       = True,
     ) -> None:
         """Initialize Ask-Tell optimizer.
 
@@ -106,6 +108,7 @@ class AskTellFewShotMulti:
         self._verbose = verbose
         self.tokens_used = 0
         self.cos_sim = cos_sim
+
 
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         return get_llm(
@@ -278,89 +281,29 @@ class AskTellFewShotMulti:
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
         return openai_choice_predict(queries, self.llm, self._verbose)
 
-    def inv_predict(self, y: float) -> str:
+    def inv_predict(self, y: float, system_message: Optional[str] = "") -> str:
         """A rough inverse model"""
         if not self._ready:
             raise ValueError(
                 "Must tell at least one example before inverse predicting."
             )
+        if not system_message:
+            warnings.warn("No system message provided for inverse prediction. Using default. \nNot clearly specifying the task for the LLM usually decreases its performance considerably.")
+
         query = self.inv_prompt.format(
             y=self.format_y(y), y_name=self._y_name, x_name=self._x_name
         )
         x, tokens = self.inv_llm.predict(
             query,
             inv_pred=True,
-            system_message="""You are an expert in heterogeneous catalysis, with deep knowledge of the electronic properties of elements, especially how transition metals interact with various supports to synergistically catalyze reactions under different conditions. Your expertise extends to designing experimental procedures aimed at achieving desired material properties. Your capabilities are built on the most current and comprehensive information available, up to April 2023. When responding to inquiries, please focus on providing specific experimental procedures, without including explanations. Your approach should reflect a balanced integration of user-provided information and your base knowledge to identify the most impactful experimental strategies for their needs. Our goal is to deliver clear and direct procedural guidance, ENSURING that we match the user's example formats when responding, to identify the most effective experimental procedure for their needs. 
-            These are the possible parameters that can be input:
-catalyst       name                              precursor                         support    M1b       M2b       M3b
-Mn–Na2WO4/BN   Mn(NO3)2·6H2O, Na2WO4            BN                                Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/MgO  Mn(NO3)2·6H2O, Na2WO4            MgO                               Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/Al2O3 Mn(NO3)2·6H2O, Na2WO4            Al2O3                             Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/SiO2  Mn(NO3)2·6H2O, Na2WO4           SiO2                              Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/SiC   Mn(NO3)2·6H2O, Na2WO4           SiC                               Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/SiCnf Mn(NO3)2·6H2O, Na2WO4           SiCnf                             Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/BEA    Mn(NO3)2·6H2O, Na2WO4          BEA                               Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/ZSM-5  Mn(NO3)2·6H2O, Na2WO4          ZSM-5                             Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/TiO2   Mn(NO3)2·6H2O, Na2WO4          TiO2                              Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/ZrO2   Mn(NO3)2·6H2O, Na2WO4          ZrO2                              Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/Nb2O5   Mn(NO3)2·6H2O, Na2WO4         Nb2O5                             Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/CeO2    Mn(NO3)2·6H2O, Na2WO4         CeO2                              Mn (40)   Na (40)   W (20)
-Mn–Li2WO4/SiO2    Mn(NO3)2·6H2O, Li2WO4         SiO2                              Mn (40)   Li (40)   W (20)
-Mn–MgWO4/SiO2     Mn(NO3)2·6H2O, MgWO4          SiO2                              Mn (50)   Mg (25)   W (25)
-Mn–K2WO4/SiO2      Mn(NO3)2·6H2O, K2WO4         SiO2                              Mn (40)   K (40)    W (20)
-Mn–CaWO4/SiO2      Mn(NO3)2·6H2O, CaWO4         SiO2                              Mn (50)   Ca (25)   W (25)
-Mn–SrWO4/SiO2      Mn(NO3)2·6H2O, SrWO4         SiO2                              Mn (50)   Sr (25)   W (25)
-Mn–BaWO4/SiO2      Mn(NO3)2·6H2O, BaWO4         SiO2                              Mn (50)   Ba (25)   W (25)
-Mn–Li2MoO4/SiO2    Mn(NO3)2·6H2O, Li2MoO4       SiO2                              Mn (40)   Li (40)   Mo (20)
-Mn–Na2MoO4/SiO2    Mn(NO3)2·6H2O, Na2MoO4       SiO2                              Mn (40)   Na (40)   Mo (20)
-Mn–K2MoO4/SiO2     Mn(NO3)2·6H2O, K2MoO4        SiO2                              Mn (40)   K (40)    Mo (20)
-Mn–FeMoO4/SiO2     Mn(NO3)2·6H2O, FeMoO4        SiO2                              Mn (50)   Fe (25)   Mo (25)
-Mn–ZnMoO4/SiO2     Mn(NO3)2·6H2O, ZnMoO4        SiO2                              Mn (50)   Zn (25)   Mo (25)
-Ti–Na2WO4/SiO2      Ti(OiPr)4, Na2WO4            SiO2                              Ti (40)   Na (40)   W (20)
-V–Na2WO4/SiO2       VOSO4·xH2O (x = 3–5), Na2WO4 SiO2                              V (40)    Na (40)   W (20)
-Fe–Na2WO4/SiO2      Fe(NO3)3·9H2O, Na2WO4        SiO2                              Fe (40)   Na (40)   W (20)
-Co–Na2WO4/SiO2      Co(NO3)2·6H2O, Na2WO4        SiO2                              Co (40)   Na (40)   W (20)
-Ni–Na2WO4/SiO2      Ni(NO3)2·6H2O, Na2WO4        SiO2                              Ni (40)   Na (40)   W (20)
-Cu–Na2WO4/SiO2      Cu(NO3)2·5H2O, Na2WO4        SiO2                              Cu (40)   Na (40)   W (20)
-Zn–Na2WO4/SiO2      Zn(NO3)2·6H2O, Na2WO4        SiO2                              Zn (40)   Na (40)   W (20)
-Y–Na2WO4/SiO2       Y(NO3)3·6H2O, Na2WO4         SiO2                              Y (40)    Na (40)   W (20)
-Zr–Na2WO4/SiO2      ZrO(NO3)2·2H2O, Na2WO4      SiO2                              Zr (40)   Na (40)   W (20)
-Mo–Na2WO4/SiO2      (NH4)2MoO4, Na2WO4           SiO2                              Mo (40)   Na (40)   W (20)
-Pd–Na2WO4/SiO2      Pd(OAc)2, Na2WO4             SiO2                              Pd (40)   Na (40)   W (20)
-La–Na2WO4/SiO2      La(NO3)3, Na2WO4             SiO2                              La (40)   Na (40)   W (20)
-Ce–Na2WO4/SiO2      Ce(NO3)3·6H2O, Na2WO4        SiO2                              Ce (40)   Na (40)   W (20)
-Nd–Na2WO4/SiO2      Nd(NO3)3·6H2O, Na2WO4        SiO2                              Nd (40)   Na (40)   W (20)
-Eu–Na2WO4/SiO2      Eu(NO3)3·5H2O, Na2WO4        SiO2                              Eu (40)   Na (40)   W (20)
-Tb–Na2WO4/SiO2      Tb(NO3)3·5H2O, Na2WO4        SiO2                              Tb (40)   Na (40)   W (20)
-Hf–Na2WO4/SiO2      Hf(OEt)4, Na2WO4             SiO2                              Hf (40)   Na (40)   W (20)
-blank             —                                —                                 —         —         —         —
-BN                —                                BN                                —         —         —         —
-MgO               —                                MgO                               —         —         —         —
-Al2O3             —                                Al2O3                             —         —         —         —
-SiO2              —                                SiO2                              —         —         —         —
-SiC               —                                SiC                               —         —         —         —
-SiCnf             —                                SiCnf                             —         —         —         —
-BEA               —                                BEA                               —         —         —         —
-ZSM-5             —                                ZSM-5                             —         —         —         —
-TiO2              —                                TiO2                              —         —         —         —
-ZrO2              —                                ZrO2                              —         —         —         —
-Nb2O5             —                                Nb2O5                             —         —         —         —
-CeO2              —                                CeO2                              —         —         —         —
-Na2WO4/SiO2       Na2WO4                           SiO2                              —         Na (67)  W (33)   —
-Mn–WOx/SiO2       Mn(NO3)2·6H2O, (NH4)10H2(W2O7)6 SiO2                             Mn (67)   —         W (33)   —
-Mn–MoOx/SiO2      Mn(NO3)2·6H2O, (NH4)2MoO4      SiO2                              Mn (67)   —         Mo (33)  —
-Mn–Na/SiO2        Mn(NO3)2·6H2O, NaNO3           SiO2                              Mn (50)   Na (50)   —
-WOx/SiO2          (NH4)10H2(W2O7)6                SiO2                              —         —         —         W (100)
-Na/SiO2           NaNO3                            SiO2                              —         Na (100) —         —
-
-Your experimental procedures can only use those parameters. This is more information to help control how you output these procedures: The metal loadings to a unit gram of support were fixed at 0.371 mmol for Metal 1, 0.370 or 0.185 mmol for Metal 2 (depending on the valence), and 0.185 mmol for Metal 3. The values in parentheses need to correspond to relative atomic percentages of M1–M3: to a unit gram of the support, only choose from, 0.371 mmol M1, 0.370 or 0.185 mmol M2, and 0.185 mmol M3 or 0.0. Use the exact format of the given examples when responding, given a property like C2 yield.
-""")
+            system_message=system_message
+            )
         return x[0]
 
     def set_calibration_factor(self, calibration_factor):
         self._calibration_factor = calibration_factor
 
-    def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
+    def predict(self, x: str, system_message: Optional[str] = "") -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
 
         Args:
@@ -380,8 +323,10 @@ Your experimental procedures can only use those parameters. This is more informa
             self._ready = True 
 
         if self._selector_k is not None:
-            # have to update this until my PR is merged
             self.prompt.example_selector.k = min(self._example_count, self._selector_k)
+
+        if not system_message:
+            warnings.warn("No system message provided for prediction. Using default. \nNot clearly specifying the task for the LLM usually decreases its performance considerably.")
 
         queries = [
             self.prompt.format(
@@ -392,7 +337,7 @@ Your experimental procedures can only use those parameters. This is more informa
         ]
         results, tokens = self.llm.predict(
             queries,
-            system_message = "You are a bot that can accurately predict chemical and material properties from their synthesis and experimental procedures. Do not explain answers, just provide numerical predictions."
+            system_message=system_message
         )
         self.tokens_used += tokens
 
@@ -431,6 +376,8 @@ Your experimental procedures can only use those parameters. This is more informa
         aug_random_filter: int = 0,
         lambda_mult: float = 0.5,
         _lambda: float = 0.5,
+        system_message: Optional[str] = "",
+        inv_system_message: Optional[str] = "",
     ) -> Tuple[List[str], List[float], List[float]]:
         """Ask the optimizer for the next x to try.
 
@@ -474,7 +421,7 @@ Your experimental procedures can only use those parameters. This is more informa
         if inv_filter+aug_random_filter < len(possible_x):
             possible_x_l = []
             if inv_filter:
-                approx_x = self.inv_predict(best * np.random.normal(1.2, 0.05))
+                approx_x = self.inv_predict(best * np.random.normal(1.2, 0.05), system_message=inv_system_message)
                 possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter, lambda_mult=lambda_mult))
 
             if aug_random_filter:
@@ -482,7 +429,7 @@ Your experimental procedures can only use those parameters. This is more informa
         else:
             possible_x_l = list(possible_x)
         
-        results = self._ask(possible_x_l, best, aq_fxn, k)
+        results = self._ask(possible_x_l, best, aq_fxn, k, system_message=system_message)
         if len(results[0]) == 0 and len(possible_x_l) != 0:
             # if we have nothing, just return random one
             return (
@@ -494,9 +441,9 @@ Your experimental procedures can only use those parameters. This is more informa
         return results
 
     def _ask(
-        self, possible_x: List[str], best: float, aq_fxn: Callable, k: int
+        self, possible_x: List[str], best: float, aq_fxn: Callable, k: int, system_message: str
     ) -> Tuple[List[str], List[float], List[float]]:
-        results = self.predict(possible_x)
+        results = self.predict(possible_x, system_message=system_message)
         # drop empties
         if type(results) != type([]):
             results = [results]
