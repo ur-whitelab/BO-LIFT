@@ -298,6 +298,7 @@ class AskTellFewShotMulti:
             inv_pred=True,
             system_message=system_message
             )
+        print(x[0])
         return x[0]
 
     def set_calibration_factor(self, calibration_factor):
