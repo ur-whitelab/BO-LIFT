@@ -1,3 +1,7 @@
+from typing import Dict, List, Any, Type
+from pydantic import BaseModel, Field
+from langchain_core.embeddings import Embeddings
+from langchain_core.vectorstores import VectorStore
 import numpy as np
 from functools import partial
 from typing import *
@@ -48,6 +52,40 @@ class QuantileTransformer:
         )
         return values_from_scores
 
+
+class LabelSimilarityExampleSelector(SemanticSimilarityExampleSelector):
+    examples: List[Dict] = Field(default_factory=list)
+
+    def select_examples(self, input_variables: Dict[str, str]) -> List[dict]:
+        # need to select examples with the most similar y from input_variables
+        y = input_variables["y"]
+        self.examples.sort(key=lambda ex: abs(float(y) - float(ex["y"])))
+        return self.examples[:self.k]
+    
+    
+    def add_example(self, example: Dict[str, str]) -> str:
+        self.examples.append(example)
+
+    @classmethod
+    def from_examples(cls, 
+                      examples: List[Dict],
+                      embeddings: Embeddings,
+                      vectorstore_cls: type[VectorStore],
+                      k: int = 4,
+                      input_keys: List[str] | None = None,
+                      *,
+                      example_keys: List[str] | None = None,
+                      vectorstore_kwargs: Dict | None = None,
+                      **vectorstore_cls_kwargs: Any):
+        new_class = super().from_examples(examples, embeddings, vectorstore_cls, k, input_keys, example_keys=example_keys, vectorstore_kwargs=vectorstore_kwargs, **vectorstore_cls_kwargs)
+        new_class.examples = examples
+        return new_class
+    
+    def __str__(self) -> str:
+        return f"LabelSimilarityExampleSelector(examples={len(self.examples)}, k={self.k})"
+    
+    def __repr__(self) -> str:
+        return self.__str__()
 
 class AskTellFewShotMulti:
     def __init__(
@@ -148,7 +186,7 @@ class AskTellFewShotMulti:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
             
-            sim_selector = SemanticSimilarityExampleSelector #if self.cos_sim else MaxMarginalRelevanceExampleSelector
+            sim_selector = LabelSimilarityExampleSelector #SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
             example_selector = sim_selector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
