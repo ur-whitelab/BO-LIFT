@@ -15,6 +15,7 @@ from .llm_model import (
 from .aqfxns import (
     probability_of_improvement,
     expected_improvement,
+    log_expected_improvement,
     upper_confidence_bound,
     greedy,
 )
@@ -439,6 +440,8 @@ class AskTellFewShotMulti:
             aq_fxn = probability_of_improvement
         elif aq_fxn == "expected_improvement":
             aq_fxn = expected_improvement
+        elif aq_fxn == "log_expected_improvement":
+            aq_fxn = log_expected_improvement
         elif aq_fxn == "upper_confidence_bound":
             aq_fxn = partial(upper_confidence_bound, _lambda=_lambda)
         elif aq_fxn == "greedy":
