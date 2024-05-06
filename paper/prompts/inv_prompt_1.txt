@@ -4,7 +4,6 @@ catalyst       name                              precursor                      
 Mn–Na2WO4/BN   Mn(NO3)2·6H2O, Na2WO4            BN                                Mn (40)   Na (40)   W (20)
 Mn–Na2WO4/MgO  Mn(NO3)2·6H2O, Na2WO4            MgO                               Mn (40)   Na (40)   W (20)
 Mn–Na2WO4/Al2O3 Mn(NO3)2·6H2O, Na2WO4            Al2O3                             Mn (40)   Na (40)   W (20)
-Mn–Na2WO4/SiO2  Mn(NO3)2·6H2O, Na2WO4           SiO2                              Mn (40)   Na (40)   W (20)
 Mn–Na2WO4/SiC   Mn(NO3)2·6H2O, Na2WO4           SiC                               Mn (40)   Na (40)   W (20)
 Mn–Na2WO4/SiCnf Mn(NO3)2·6H2O, Na2WO4           SiCnf                             Mn (40)   Na (40)   W (20)
 Mn–Na2WO4/BEA    Mn(NO3)2·6H2O, Na2WO4          BEA                               Mn (40)   Na (40)   W (20)

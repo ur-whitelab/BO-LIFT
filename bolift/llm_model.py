@@ -3,6 +3,7 @@ import os
 import re
 import openai
 from langchain_openai import OpenAI, ChatOpenAI
+from langchain_community.chat_models import ChatAnyscale
 from langchain_community.callbacks import get_openai_callback
 from langchain.cache import InMemoryCache
 import langchain
@@ -13,7 +14,7 @@ from functools import reduce
 from typing import Union
 import warnings
 
-langchain.llm_cache = InMemoryCache()
+# langchain.llm_cache = InMemoryCache()
 
 def wrap_chatllm(query_list, llm, system_message=None):
     if type(query_list) == str:
@@ -308,67 +309,19 @@ class ChatOpenAILLM(LLM):
         return generations[0].text
    
 
-class AnyScaleLLM(LLM):
-    # TODO: Implement AnyScaleLLM
-    def create_llm(self, query_list):
-        if type(query_list) == str:
-            query_list=[query_list]
-            
-        if "system_message" in kwargs:
-            system_message = kwargs["system_message"]
-            del kwargs["system_message"]
-        else:
-            system_message = ""
-            warnings.warn("`system_message` not provided. Not clearly specifying the task for the LLM usually decreases its performance considerably. Please provide a system_message for ChatOpenAI models when invoking the `predict` method.")
+class AnyScaleLLM(ChatOpenAILLM):
+    def create_llm(self):
+        if "logprobs" in self.kwargs:
+            del self.kwargs["logprobs"] # not supported
 
-        #anyscale keys
-        client = openai.OpenAI(api_key = os.environ['OPENAI_API_KEY'],
-                        base_url = os.environ['OPENAI_BASE_URL'])
-        
-        chat_completion= client.chat.completions.create(model=self.model_name,
-                                            temperature=self.temperature,
-                                            logprobs=self.logprobs,
-                                            top_logprobs=self.top_logprobs,
-                                            model_kwargs=self.kwargs,
-                                            messages=[{"role": "system", "content": system_message},
-                                                               {"role": "user", "content": query_list}])
-        return chat_completion
+        return ChatAnyscale(
+            model_name=self.model_name,
+            temperature=self.temperature,
+            n=self.n,
+            max_tokens=self.max_tokens,
+            model_kwargs=self.kwargs,
+        )
 
-    def predict(self, chat_completion, inv_pred=False, verbose=False, *args, **kwargs):
-
-        for message in chat_completion:
-            print(message.choices[0].delta.content, end="", flush=True)
-    
-        if verbose:
-            print("-" * 80)
-            print(query_list[0])
-            print("-" * 80)
-            print(query_list[0], chat_completion_response.generations[0][0].text)
-            print("-" * 80)
-
-        results = []
-        for gens in completion_response.generations:
-            if inv_pred:
-                results.append(self.parse_inv_response(gens))
-            else:
-                results.append(self.parse_response(gens))
-        return results, token_usage
-
-    def parse_response(self, generations):
-        values = []
-        for gen in generations:
-            try:
-                v = float(truncate(gen.text))
-                values.append(v)
-            except ValueError:
-                continue
-
-        probs = [1 / len(values) for _ in values]
-        # return DiscreteDist(np.array(values), probs)
-        return make_dd(np.array(values), probs)
-    
-    def parse_inv_response(self, generations):
-        return generations[0].text
 
 
 # TODO: Clean up the following code
