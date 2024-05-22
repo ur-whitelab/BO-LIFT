@@ -3,6 +3,7 @@ import os
 import re
 import openai
 from langchain_openai import OpenAI, ChatOpenAI
+from langchain_community.chat_models import ChatAnyscale
 from langchain_community.callbacks import get_openai_callback
 from langchain.cache import InMemoryCache
 import langchain
@@ -13,7 +14,7 @@ from functools import reduce
 from typing import Union
 import warnings
 
-langchain.llm_cache = InMemoryCache()
+# langchain.llm_cache = InMemoryCache()
 
 def wrap_chatllm(query_list, llm, system_message=None):
     if type(query_list) == str:
@@ -308,188 +309,16 @@ class ChatOpenAILLM(LLM):
         return generations[0].text
    
 
-class AnyScaleLLM(LLM):
-    # TODO: Implement AnyScaleLLM
-    def create_llm(self, query_list):
-        if type(query_list) == str:
-            query_list=[query_list]
-            
-        if "system_message" in kwargs:
-            system_message = kwargs["system_message"]
-            del kwargs["system_message"]
-        else:
-            system_message = ""
-            warnings.warn("`system_message` not provided. Not clearly specifying the task for the LLM usually decreases its performance considerably. Please provide a system_message for ChatOpenAI models when invoking the `predict` method.")
+class AnyScaleLLM(ChatOpenAILLM):
+    def create_llm(self):
+        if "logprobs" in self.kwargs:
+            del self.kwargs["logprobs"] # not supported
 
-        #anyscale keys
-        client = openai.OpenAI(api_key = os.environ['OPENAI_API_KEY'],
-                        base_url = os.environ['OPENAI_BASE_URL'])
-        
-        chat_completion= client.chat.completions.create(model=self.model_name,
-                                            temperature=self.temperature,
-                                            logprobs=self.logprobs,
-                                            top_logprobs=self.top_logprobs,
-                                            model_kwargs=self.kwargs,
-                                            messages=[{"role": "system", "content": system_message},
-                                                               {"role": "user", "content": query_list}])
-        return chat_completion
-
-    def predict(self, chat_completion, inv_pred=False, verbose=False, *args, **kwargs):
-
-        for message in chat_completion:
-            print(message.choices[0].delta.content, end="", flush=True)
-    
-        if verbose:
-            print("-" * 80)
-            print(query_list[0])
-            print("-" * 80)
-            print(query_list[0], chat_completion_response.generations[0][0].text)
-            print("-" * 80)
-
-        results = []
-        for gens in completion_response.generations:
-            if inv_pred:
-                results.append(self.parse_inv_response(gens))
-            else:
-                results.append(self.parse_response(gens))
-        return results, token_usage
-
-    def parse_response(self, generations):
-        values = []
-        for gen in generations:
-            try:
-                v = float(truncate(gen.text))
-                values.append(v)
-            except ValueError:
-                continue
-
-        probs = [1 / len(values) for _ in values]
-        # return DiscreteDist(np.array(values), probs)
-        return make_dd(np.array(values), probs)
-    
-    def parse_inv_response(self, generations):
-        return generations[0].text
-
-
-# TODO: Clean up the following code
-def parse_response(generation, prompt, llm):
-    # first parse the options into numbers
-    text = generation.text
-    matches = re.findall(r"([A-Z])\. .*?([\+\-\d][\d\.e]*)", text)
-    values = dict()
-    k = None
-    for m in matches:
-        try:
-            k, v = m[0], float(m[1])
-            values[k] = v
-        except ValueError:
-            pass
-        k = None
-    # now get log prob of tokens after Answer:
-    tokens = generation.generation_info["logprobs"]["top_logprobs"]
-    offsets = generation.generation_info["logprobs"]["text_offset"]
-    if "Answer:" not in text:
-        # try to extend
-        c_generation = llm.generate([prompt + text + "\nAnswer:"]).generations[0][0]
-
-        logprobs = c_generation.generation_info["logprobs"]["top_logprobs"][0]
-    else:
-        # find token probs for answer
-        # feel like this is supper brittle, but not sure what else to try
-        at_answer = False
-        for i in range(len(offsets)):
-            start = offsets[i] - offsets[0]
-            end = offsets[i + 1] - offsets[0] if i < len(offsets) - 1 else -1
-            selected_token = text[start:end]
-            if "Answer" in selected_token:
-                at_answer = True
-            if at_answer and selected_token.strip() in values:
-                break
-        logprobs = tokens[i]
-    result = [
-        (values[k.strip()], v) for k, v in logprobs.items() if k.strip() in values
-    ]
-    probs = np.exp(np.array([v for k, v in result]))
-    probs = probs / np.sum(probs)
-    # return DiscreteDist(np.array([k for k, v in result]), probs)
-    return make_dd(np.array([k for k, v in result]), probs)
-
-def remove_overlap(s1, s2, check_l=10):
-    """There may be some of s1 in s2. Remove it and return rest of s2"""
-    for i in range(check_l, 0, -1):
-        if s1[-i:] == s2[:i]:
-            return s2[len(s1[-i:]) :]
-    return s2
-
-def parse_response_topk(generations):
-    values, logprobs = [], []
-    for gen in generations:
-        try:
-            v = float(truncate(gen.text))
-            values.append(v)
-        except ValueError:
-            continue
-        # can do inner sum because there is only one token
-        lp = sum(
-            [
-                sum(reduce(lambda a, b: {**a, **b}, gen.generation_info["logprobs"]["top_logprobs"]).values())
-            ]
+        return ChatAnyscale(
+            model_name=self.model_name,
+            temperature=self.temperature,
+            n=self.n,
+            max_tokens=self.max_tokens,
+            model_kwargs=self.kwargs,
         )
-        logprobs.append(lp)
 
-    probs = np.exp(np.array(logprobs))
-    probs = probs / np.sum(probs)
-    # return DiscreteDist(np.array(values), probs)
-    return make_dd(np.array(values), probs)
-
-def parse_response_n(generations):
-    values = []
-    for gen in generations:
-        try:
-            v = float(truncate(gen.text))
-            values.append(v)
-        except ValueError:
-            continue
-
-    probs = [1 / len(values) for _ in values]
-    # return DiscreteDist(np.array(values), probs)
-    return make_dd(np.array(values), probs)
-
-def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
-    """Predict the output numbers for a given list of queries"""
-    with get_openai_callback() as cb:
-        completion_response = llm.generate(query_list, *args, **kwargs)
-        token_usage = cb.total_tokens
-    if verbose:
-        print("-" * 80)
-        print(query_list[0])
-        print("-" * 80)
-        print(query_list[0], completion_response.generations[0][0].text)
-        print("-" * 80)
-    results = []
-    for gen, q in zip(completion_response.generations, query_list):
-        results.append(parse_response(gen[0], q, llm))
-    return results, token_usage
-
-def openai_topk_predict(query_list, llm, verbose, *args, **kwargs):
-    """Predict the output numbers for a given list of queries"""
-    query_list = wrap_chatllm(query_list, 
-                              llm, 
-                              system_message="You are a bot that can predict chemical and material properties. Do not explain answers, just provide numerical predictions."
-                            )
-    with get_openai_callback() as cb:
-        completion_response = llm.generate(query_list, *args, **kwargs)
-        token_usage = cb.total_tokens
-    if verbose:
-        print("-" * 80)
-        print(query_list[0])
-        print("-" * 80)
-        print(query_list[0], completion_response.generations[0][0].text)
-        print("-" * 80)
-    results = []
-    for gens in completion_response.generations:
-        if type(llm) == ChatOpenAI:
-            results.append(parse_response_n(gens))
-        else:
-            results.append(parse_response_topk(gens))
-    return results, token_usage
