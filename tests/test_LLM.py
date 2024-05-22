@@ -25,12 +25,21 @@ class TestLLM(ABC):
         result, token = llm.predict("The value of 1 + 1 is")
         assert result[0].mean() == 2
 
+
+class TestOpenAILLM(TestLLM):
+    __test__ = True
+
+    @classmethod
+    def models_to_test(cls):
+        return ["gpt-3.5-turbo-instruct"]
+
+
 class TestChatOpenAILLM(TestLLM):
     __test__ = True
 
     @classmethod
     def models_to_test(cls):
-        return ["gpt-3.5-turbo"]
+        return ["gpt-3.5-turbo-0125"]
     
     def test_parse_response(self, model_name):
         print(model_name)
@@ -51,15 +60,8 @@ class TestChatOpenAILLM(TestLLM):
             HumanMessage(content=prompt)
         ]
 
-        g = llm.llm.generate([prompt]).generations
+        g = llm.llm.generate([query]).generations
         result = llm.parse_response(g[0])
 
         assert abs(result.mode().astype(int) - answer) <= 1
-
-class TestOpenAILLM(TestLLM):
-    __test__ = True
-
-    @classmethod
-    def models_to_test(cls):
-        return ["gpt-3.5-turbo-instruct"]
 

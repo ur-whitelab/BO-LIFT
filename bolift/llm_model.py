@@ -5,7 +5,7 @@ import openai
 from langchain_openai import OpenAI, ChatOpenAI
 from langchain_community.chat_models import ChatAnyscale
 from langchain_community.callbacks import get_openai_callback
-from langchain.cache import InMemoryCache
+# from langchain.cache import InMemoryCache
 import langchain
 from dataclasses import dataclass
 
@@ -141,6 +141,7 @@ def get_llm(
         return AnyScaleLLM(**kwargs)
     raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models + anyscale_models}")
 
+
 class LLM:
     def __init__(self, 
                  model_name     : str = "gpt-3.5-turbo-instruct", 
@@ -150,8 +151,7 @@ class LLM:
                  best_of        : int = 1, 
                  max_tokens     : int = 128, 
                  logit_bias     : dict = {},
-                 logprobs       : bool = True,
-                 top_logprobs   : int = 5,
+                 logprobs       : int = 5,
                  **kwargs
                 ) -> None:
         self.model_name = model_name
@@ -162,7 +162,6 @@ class LLM:
         self.max_tokens = max_tokens
         self.logit_bias = logit_bias
         self.logprobs = logprobs
-        self.top_logprobs = top_logprobs
         self.kwargs = kwargs
         self.llm = self.create_llm()
 
@@ -185,10 +184,11 @@ class OpenAILLM(LLM):
             model_name=self.model_name,
             temperature=self.temperature,
             n=self.n,
+            max_tokens=self.max_tokens,
             best_of=self.best_of,
             top_p=self.top_p,
             logit_bias=self.logit_bias,
-            max_tokens=self.max_tokens,
+            logprobs = self.logprobs,
             model_kwargs=self.kwargs
         )
     
@@ -198,9 +198,9 @@ class OpenAILLM(LLM):
 
         if "system_message" in kwargs:
             del kwargs["system_message"]
-
         with get_openai_callback() as cb:
             completion_response = self.llm.generate(query_list, *args, **kwargs)
+            print(completion_response)
             token_usage = cb.total_tokens
         if verbose:
             print("-" * 80)
@@ -291,7 +291,6 @@ class ChatOpenAILLM(LLM):
                 results.append(self.parse_response(gens))
         return results, token_usage
         
-
     def parse_response(self, generations):
         values = []
         for gen in generations:

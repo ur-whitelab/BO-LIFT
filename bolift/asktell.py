@@ -7,8 +7,6 @@ from functools import partial
 from typing import *
 from .llm_model import (
     get_llm,
-    openai_choice_predict,
-    openai_topk_predict,
     DiscreteDist,
     GaussDist,
 )
