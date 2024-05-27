@@ -192,7 +192,7 @@ class OpenAILLM(LLM):
             model_kwargs=self.kwargs
         )
     
-    def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
+    def predict(self, query_list, inv_pred=True, verbose=False, *args, **kwargs): # changed inv pedict to true was false
         if type(query_list) == str:
             query_list = [query_list]
 
