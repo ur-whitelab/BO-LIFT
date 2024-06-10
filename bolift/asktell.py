@@ -162,11 +162,11 @@ class AskTellFewShotMulti:
             model_name=model,
             # put stop with suffix, so it doesn't start babbling
             stop=[
-                self.prompt.suffix.split()[0],
-                self.inv_prompt.suffix.split()[0],
+                # self.prompt.suffix.split()[0],
+                # self.inv_prompt.suffix.split()[0],
                 # "\n",
             ],
-            max_tokens=512,
+            max_tokens=576,
             temperature=0.05 if temperature is None else temperature,
         )
 
@@ -335,7 +335,7 @@ class AskTellFewShotMulti:
             inv_pred=True,
             system_message=system_message
             )
-        print(x[0])
+
         return x[0]
 
     def set_calibration_factor(self, calibration_factor):
@@ -434,6 +434,15 @@ class AskTellFewShotMulti:
         if type(possible_x) == type([]):
             possible_x = Pool(possible_x, self.format_x)
 
+        # if we have less than 2 examples, just return random
+        if self._example_count < 2:
+            init_pnt=possible_x.sample(k)
+            return (
+                init_pnt,
+                [0] * k,
+                [0] * k,
+            )
+
         if aq_fxn == "probability_of_improvement":
             aq_fxn = probability_of_improvement
         elif aq_fxn == "expected_improvement":
@@ -477,7 +486,6 @@ class AskTellFewShotMulti:
                 [0] * k,
                 [0] * k,
             )
-        # print("ask results:",results)
         return results
 
     def _ask(
@@ -522,7 +530,7 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
             temperature=0.1 if temperature is None else temperature,
             model_name=model,
             top_p=1.0,
-            # stop=["\n", "###", "#", "##"],
+            stop=["\n", "###", "#", "##"],
             logit_bias={
                 "198": -100,  # new line,
                 "628": -100,  # double new line,

@@ -57,7 +57,7 @@ def expected_improvement_d(probs, values, best):
 def log_expected_improvement_d(probs, values, best):
     """Log Expected improvement for the given discrete distribution"""
     # ei = np.sum(np.maximum(values - best, 0) * probs)
-    log_ei = np.log(np.sum(np.maximum(values - best, 0) * probs))
+    log_ei = np.log(np.sum(np.maximum(values - best, 0) * probs)+1e-15)
     return log_ei
 
 def probability_of_improvement_d(probs, values, best):
@@ -86,7 +86,7 @@ def expected_improvement_g(mean, std, best):
 
 def log_expected_improvement_g(mean, std, best):
     """Log Expected improvement for the given Gaussian distribution"""
-    z = (mean - best) / std
+    z = (mean - best) / std 
     # ei = std * h(z)
     # ei = std * (norm.pdf(z) + z * norm.cdf(z))
     log_ei = np.log(std) + np.log((norm.pdf(z) + z * norm.cdf(z)))
