@@ -8,7 +8,7 @@ from typing import *
 from botorch.models.gp_regression import SingleTaskGP
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from botorch.optim.fit import fit_gpytorch_torch
+from botorch.optim.fit import fit_gpytorch_mll_torch
 import torch
 from langchain_openai import OpenAIEmbeddings
 from sklearn.manifold import Isomap
@@ -103,7 +103,7 @@ class AskTellGPR(AskTellFewShotTopk):
         train_y = torch.tensor(list(map(float, y))).unsqueeze(-1).double()
         self.regressor = SingleTaskGP(train_x, train_y)
         mll = ExactMarginalLogLikelihood(self.regressor.likelihood, self.regressor)
-        fit_gpytorch_torch(mll)
+        fit_gpytorch_mll_torch(mll)
 
     def tell(
         self, x: str, y: float, alt_ys: Optional[List[float]] = None, train=True

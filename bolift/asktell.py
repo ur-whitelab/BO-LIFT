@@ -150,8 +150,7 @@ class AskTellFewShotMulti:
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         return get_llm(
             model_name=model,
-            # put stop with suffix, so it doesn't start babbling
-            stop=[self.prompt.suffix.split()[0], self.inv_prompt.suffix.split()[0]],
+            # stop=[self.prompt.suffix.split()[0], self.inv_prompt.suffix.split()[0]],
             max_tokens=256,
             logprobs=self._k,
             temperature=0.05 if temperature is None else temperature,
@@ -160,12 +159,11 @@ class AskTellFewShotMulti:
     def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
         return get_llm(
             model_name=model,
-            # put stop with suffix, so it doesn't start babbling
-            stop=[
-                # self.prompt.suffix.split()[0],
-                # self.inv_prompt.suffix.split()[0],
-                # "\n",
-            ],
+            # stop=[
+            #     self.prompt.suffix.split()[0],
+            #     self.inv_prompt.suffix.split()[0],
+            #     "\n",
+            # ],
             max_tokens=576,
             temperature=0.05 if temperature is None else temperature,
         )
@@ -530,7 +528,7 @@ class AskTellFewShotTopk(AskTellFewShotMulti):
             temperature=0.1 if temperature is None else temperature,
             model_name=model,
             top_p=1.0,
-            stop=["\n", "###", "#", "##"],
+            # stop=["\n", "###", "#", "##"],
             logit_bias={
                 "198": -100,  # new line,
                 "628": -100,  # double new line,
