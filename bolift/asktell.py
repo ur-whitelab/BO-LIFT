@@ -7,8 +7,8 @@ from functools import partial
 from typing import *
 from .llm_model import (
     get_llm,
-    openai_choice_predict,
-    openai_topk_predict,
+    # openai_choice_predict,
+    # openai_topk_predict,
     DiscreteDist,
     GaussDist,
 )
@@ -337,7 +337,7 @@ class AskTellFewShotMulti:
             inv_pred=True,
             system_message=system_message
             )
-        print(x[0])
+
         return x[0]
 
     def set_calibration_factor(self, calibration_factor):
@@ -436,6 +436,7 @@ class AskTellFewShotMulti:
         if type(possible_x) == type([]):
             possible_x = Pool(possible_x, self.format_x)
 
+        # if we have less than 2 examples, just return random
         if self._example_count < 2:
             init_pnt=possible_x.sample(k)
             return (
@@ -487,7 +488,6 @@ class AskTellFewShotMulti:
                 [0] * k,
                 [0] * k,
             )
-        # print("ask results:",results)
         return results
 
     def _ask(
