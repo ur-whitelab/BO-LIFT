@@ -111,7 +111,7 @@ def make_dd(values, probs):
 def get_llm(
         model_name      : str   = "gpt-3.5-turbo",
         temperature     : float = 0.7,
-        n               : int   = 1,
+        n               : int   = 5,
         top_p           : int   = 1,
         best_of         : int   = 1,
         max_tokens      : int   = 128,
@@ -150,8 +150,6 @@ class LLM:
                  best_of        : int = 1, 
                  max_tokens     : int = 128, 
                  logit_bias     : dict = {},
-                 logprobs       : bool = True,
-                 top_logprobs   : int = 5,
                  **kwargs
                 ) -> None:
         self.model_name = model_name
@@ -161,8 +159,6 @@ class LLM:
         self.best_of = best_of
         self.max_tokens = max_tokens
         self.logit_bias = logit_bias
-        self.logprobs = logprobs
-        self.top_logprobs = top_logprobs
         self.kwargs = kwargs
         self.llm = self.create_llm()
 
@@ -181,18 +177,21 @@ class LLM:
     
 class OpenAILLM(LLM):
     def create_llm(self):
+        self.kwargs.update({
+            "logprobs": 5,
+        })
         return OpenAI(
             model_name=self.model_name,
             temperature=self.temperature,
             n=self.n,
-            best_of=self.best_of,
             top_p=self.top_p,
-            logit_bias=self.logit_bias,
+            best_of=self.best_of,
             max_tokens=self.max_tokens,
+            logit_bias=self.logit_bias,
             model_kwargs=self.kwargs
         )
     
-    def predict(self, query_list, inv_pred=True, verbose=False, *args, **kwargs): # changed inv pedict to true was false
+    def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
         if type(query_list) == str:
             query_list = [query_list]
 
@@ -235,7 +234,7 @@ class OpenAILLM(LLM):
 
         probs = np.exp(np.array(logprobs))
         probs = probs / np.sum(probs)
-        # return DiscreteDist(np.array(values), probs)
+
         return make_dd(np.array(values), probs)
 
     def parse_inv_response(self, generations):
@@ -244,9 +243,10 @@ class OpenAILLM(LLM):
 
 class ChatOpenAILLM(LLM):
     def create_llm(self):
-        if "logprobs" in self.kwargs:
-            del self.kwargs["logprobs"] # not supported
-
+        self.kwargs.update({
+            "logprobs": True,
+            "top_logprobs": 5
+        })
         return ChatOpenAI(
             model_name=self.model_name,
             temperature=self.temperature,
@@ -293,16 +293,21 @@ class ChatOpenAILLM(LLM):
         
 
     def parse_response(self, generations):
-        values = []
+        values, logprobs = [], []
         for gen in generations:
             try:
                 v = float(truncate(gen.text))
                 values.append(v)
             except ValueError:
                 continue
+            lp = sum(
+                p['logprob'] for p in  gen.generation_info["logprobs"]["content"]
+            )
+            logprobs.append(lp)
 
-        probs = [1 / len(values) for _ in values]
-        # return DiscreteDist(np.array(values), probs)
+        probs = np.exp(np.array(logprobs))
+        probs = probs / np.sum(probs)
+
         return make_dd(np.array(values), probs)
     
     def parse_inv_response(self, generations):
