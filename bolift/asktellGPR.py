@@ -1,8 +1,16 @@
 import numpy as np
 import pandas as pd
 from .pool import Pool
-from .asktell import AskTellFewShotTopk
+from .asktell import AskTellFewShot, QuantileTransformer
 from .llm_model import GaussDist
+
+from langchain.prompts.few_shot import FewShotPromptTemplate
+from langchain.prompts.prompt import PromptTemplate
+from langchain.prompts.example_selector import (
+    MaxMarginalRelevanceExampleSelector,
+    SemanticSimilarityExampleSelector,
+)
+from langchain_community.vectorstores import FAISS, Chroma
 
 from typing import *
 from botorch.models.gp_regression import SingleTaskGP
@@ -14,9 +22,10 @@ from langchain_openai import OpenAIEmbeddings
 from sklearn.manifold import Isomap
 
 
-class AskTellGPR(AskTellFewShotTopk):
+class AskTellGPR(AskTellFewShot): # AskTellFewShotTopk
     def __init__(self, n_components=2, pool=None, cache_path=None, n_neighbors=5, **kwargs):
         super().__init__(**kwargs)
+        self._selector_k = None # Forcing exemple_selector to not build context
         self._set_regressor()
         self.examples = []
         self._embedding = OpenAIEmbeddings()
@@ -76,6 +85,57 @@ class AskTellGPR(AskTellFewShotTopk):
         self.likelihood = GaussianLikelihood()
         self.regressor = None
 
+    def _setup_prompt(
+        self,
+        example: Dict,
+        prompt_template: Optional[PromptTemplate] = None,
+        suffix: Optional[str] = None,
+        prefix: Optional[str] = None,
+    ) -> FewShotPromptTemplate:
+        if prefix is None:
+            prefix = (
+                "The following are correctly answered questions. "
+                "Each answer is numeric and ends with ###\n"
+            )
+        if prompt_template is None:
+            prompt_template = PromptTemplate(
+                input_variables=["x", "y", "y_name"],
+                template="Q: Given {x}, what is {y_name}?\nA: {y}###\n\n",
+            )
+            if suffix is not None:
+                raise ValueError(
+                    "Cannot provide suffix if using default prompt template."
+                )
+            suffix = "Q: Given {x}. What is {y_name}?\nA: "
+        elif suffix is None:
+            raise ValueError("Must provide suffix if using custom prompt template.")
+        # test out prompt
+        if example is not None:
+            prompt_template.format(**example)
+            examples = [example]
+        # TODO: make fake example text
+        else:
+            examples = []
+        example_selector = None
+        if self._selector_k is not None:
+            if len(examples) == 0:
+                raise ValueError("Cannot do zero-shot with selector")
+            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
+            example_selector = sim_selector.from_examples(
+                [example],
+                OpenAIEmbeddings(),
+                FAISS,
+                k=self._selector_k,
+            )
+        return FewShotPromptTemplate(
+            examples=examples if example_selector is None else None,
+            example_prompt=prompt_template,
+            example_selector=example_selector,
+            suffix=suffix,
+            prefix=prefix,
+            input_variables=["x", "y_name"],
+        )
+
     def _predict(self, X):
         if len(X) == 0:
             raise ValueError("X is empty")
@@ -105,20 +165,41 @@ class AskTellGPR(AskTellFewShotTopk):
         mll = ExactMarginalLogLikelihood(self.regressor.likelihood, self.regressor)
         fit_gpytorch_mll_torch(mll)
 
+    def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
+        """Tell the optimizer about a new example."""
+        if self.use_quantiles:
+            self.qt = QuantileTransformer(
+                values=self._ys + [y], n_quantiles=self.n_quantiles
+            )
+            y = self.qt.to_quantiles(y)
+
+        if alt_ys is not None:
+            raise ValueError("Alt ys not supported for GPR.")
+        example_dict = dict(
+            x=self.format_x(x),
+            y=self.format_y(y),
+            y_name=self._y_name,
+        )
+        self._ys.append(y)
+        inv_dict = dict(
+            x=self.format_x(x),
+            y=self.format_y(y),
+            y_name=self._y_name,
+            x_name=self._x_name,
+        )
+        return example_dict, inv_dict
+
     def tell(
         self, x: str, y: float, alt_ys: Optional[List[float]] = None, train=True
     ) -> None:
+        # Reimplement tell to avoid feeding new points to the prompt exemple_selector
         """Tell the optimizer about a new example."""
         example_dict, inv_example = self._tell(x, y, alt_ys)
-        # we want to have example
-        # to initialize prompts, so send it
+
         if not self._ready:
             self.prompt = self._setup_prompt(
                 None, self._prompt_template, self._suffix, self._prefix
             )
-            self.inv_prompt = self._setup_inverse_prompt(inv_example)
-            self.llm = self._setup_llm(self._model, self._temperature)
-            self.inv_llm = self._setup_inv_llm(self._model, self._temperature)
             self._ready = True
 
         self.examples.append(example_dict)
@@ -136,16 +217,18 @@ class AskTellGPR(AskTellFewShotTopk):
                     [ex["y"] for ex in self.examples],
                 )
             except ValueError as e:
-                print(40*"-" + "ERROR" + 40*"-")
-                print(e)
-                print("Not enough data to train. " \
-                      "We use an isomap considering 5 neighbors. Therefore, more than 6 points are needed to train the model. " \
-                      "Use train=False to tell N-1 points to the model first. " \
-                      "Then use train=True to tell the last point to train the model.\n" \
-                      "Alternatively, use `pool` to pass a bolift.Pool to train the isomap during AskTellGPR construction.")
-                print(85*"-")
+                msg = (f"{40*'-'} ERROR {40*'-'}\n"
+                      f"{e}\n"
+                      f'Not enough data to train.\n'
+                      f'We use an isomap considering 5 neighbors. Therefore, more than 6 points are needed to train the model.\n'
+                      f'Use train=False to tell N-1 points to the model first.\n'
+                      f'Then use train=True to tell the last point to train the model.\n'
+                      f'Alternatively, use `pool` to pass a bolift.Pool to train the isomap during AskTellGPR construction.\n'
+                      f'{85*"-"}')
+                raise ValueError(msg)
 
     def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
+        # Reimplement predict to avoid creating llms and the inverse prompt
         """Predict the probability distribution and values for a given x.
 
         Args:
@@ -156,18 +239,16 @@ class AskTellGPR(AskTellFewShotTopk):
         """
         if not isinstance(x, list):
             x = [x]
+        # if not self.regressor:
+        #     raise ValueError("Model not trained. Please provide more data.")
         if not self._ready:
-            # special zero-shot
             self.prompt = self._setup_prompt(
                 None, self._prompt_template, self._suffix, self._prefix
             )
-            self.inv_prompt = self._setup_inverse_prompt(None)
-            self.llm = self._setup_llm(self._model)
             self._ready = True
 
-        if self._selector_k is not None:
-            # have to update this until my PR is merged
-            self.prompt.example_selector.k = min(self._example_count, self._selector_k)
+        # if self._selector_k is not None:
+        #     self.prompt.example_selector.k = min(self._example_count, self._selector_k)
 
         queries = [
             self.prompt.format(

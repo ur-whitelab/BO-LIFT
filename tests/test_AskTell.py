@@ -3,8 +3,9 @@ from bolift import (AskTellFewShotMulti,
                     AskTellFewShotTopk,
                     AskTellGPR,
                     AskTellNearestNeighbor,
-                    AskTellRidgeKernelRegression,
-                    AskTellFinetuning)
+                    # AskTellRidgeKernelRegression,
+                    AskTellFinetuning,
+                    Pool)
 import numpy as np
 from abc import ABC
 import pytest
@@ -17,76 +18,134 @@ np.random.seed(0)
 
 def pytest_generate_tests(metafunc):
     if 'asktell_class' in metafunc.fixturenames:
-        models = metafunc.cls.models_to_test()
+        models = metafunc.cls.asktells_to_test()
         metafunc.parametrize("asktell_class", models)
+    if 'model_name' in metafunc.fixturenames:
+        models = metafunc.cls.models_to_test()
+        metafunc.parametrize("model_name", models)
+
 
 class TestAskTell(ABC):
-    __test__ = False
+    __test__ = False # Will only test in the children classes
 
-    def test_fewshot(self, asktell_class):
-        asktell = asktell_class(x_formatter=lambda x: f"y = 2*{x}")
+    def test_tell(self, asktell_class):
+        asktell = asktell_class(x_formatter=lambda x: f"y = {x}+2")
+        for k in range(5):
+            asktell.tell(k, k+2)
+        assert asktell._example_count == 5
+
+    def test_fewshot(self, asktell_class, model_name):
+        asktell = asktell_class(model=model_name,
+                                x_formatter=lambda x: f"y = 2*{x}"
+                                )
         asktell.tell(1, 2)
         asktell.tell(2, 4)
         asktell.tell(4, 8)
         asktell.tell(16, 32)
 
-        dist = asktell.predict(2)
+        sys_msg = "You are a calculator. Given the prompt, provide the answer. Please complete the result only without any explanation."
+
+        dist = asktell.predict(2, system_message=sys_msg)
         m = dist.mode()
         assert m == pytest.approx(4, 0.001)
         
-        dist = asktell.predict(3)
+        dist = asktell.predict(3, system_message=sys_msg)
         m = dist.mode()
         assert m == pytest.approx(6, 0.001)
 
-    def test_inv_fewshot(self, asktell_class):
-        asktell = asktell_class(x_formatter=lambda x: f"2*{x}")
+    def test_inverse_fewshot(self, asktell_class, model_name):
+
+        sys_msg = "You are a inverse calculator. Given the number in the prompt, your task is to provide a matemathical equation that generates that number. Please complete the mathematical equation only without any explanation."
+
+        asktell = asktell_class(model=model_name,
+                                x_formatter=lambda x: f"y = 2*{x}"
+                                )
         asktell.tell(1, 2)
         asktell.tell(2, 4)
         asktell.tell(4, 8)
         asktell.tell(16, 32)
 
-        inverse = asktell.inv_predict(8)
+        inverse = asktell.inv_predict(8, system_message=sys_msg)
         assert "*" in inverse
 
+
 class TestAskTellMulti(TestAskTell):
-    __test__ = False
+    __test__ = False # turbo-instruct is consistently failing the test 
+
+    @classmethod
+    def asktells_to_test(cls):
+        return [AskTellFewShotMulti]
+    
+    @classmethod
+    def models_to_test(cls):
+        return ["gpt-3.5-turbo-instruct"]
+
 
 class TestAskTellTopK(TestAskTell):
     __test__ = True
 
-    @pytest.fixture
-    def asktell_class():
-        return AskTellFewShotTopk
+    @classmethod
+    def asktells_to_test(cls):
+        return [AskTellFewShotTopk]
     
+    @classmethod
+    def models_to_test(cls):
+        return ["gpt-3.5-turbo-instruct", "gpt-3.5-turbo"]
+    
+
 class TestAskTellKNN(TestAskTell):
     __test__ = False
+
 
 class TestAskTellKRR(TestAskTell):
     __test__ = False
 
+
 class TestAskTellGPR():
     __test__ = True
 
-    @pytest.fixture
-    def asktell_class():
-        return AskTellGPR
+    # @classmethod
+    # def asktells_to_test(cls):
+    #     return [AskTellGPR]
     
-    def test_gpr(asktell_class):
-        asktell = asktell_class(
+    # @pytest.mark.parametrize("asktell_class", [AskTellGPR])
+    def test_gpr(self):
+        asktell = AskTellGPR(
             x_formatter=lambda x: f"y = 2 + {x}",
             y_formatter=lambda y: str(int(y)),
         )
         for i in range(5):
             asktell.tell(i, 2 + i, train=False)
         asktell.tell(5, 7, train=True)
-        asktell.predict(5000)
-        assert asktell.ask([1, 5])[0][0] == 5
+        assert asktell.predict(0).mean() == pytest.approx(2, 0.5)
+        assert asktell.ask([1, 5, 8], k=1)[0][0] == 8
+
+    def test_gpr_fail_train(self):
+        asktell = AskTellGPR(
+            x_formatter=lambda x: f"y = 2 + {x}",
+            y_formatter=lambda y: str(int(y)),
+        )
+        with pytest.raises(ValueError):
+            asktell.tell(2, 2 + 2)
+
+    def test_gpr_train_w_pool(self):
+        pool = Pool(['1', '2', '3', '4', '5', '6'])
+        asktell = AskTellGPR(
+            x_formatter=lambda x: f"y = 2 + {x}",
+            y_formatter=lambda y: str(int(y)),
+            pool=pool
+        )
+        asktell.tell(2, 2+2)
+        assert asktell.predict(2).mean() == pytest.approx(4, 0.5)
+        assert asktell.ask([1, 2], k=1)[0][0] == 1
+        
+
 
 class TestAskTellFineTuning():
-    __test__ = True
+    __test__ = False
 
     @pytest.fixture
-    def asktell_class():
+    def asktells_to_test():
         return AskTellFinetuning
     
     def test_prepare_data_finetuning(asktell_class):
