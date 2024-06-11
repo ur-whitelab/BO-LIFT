@@ -5,7 +5,7 @@ import openai
 from langchain_openai import OpenAI, ChatOpenAI
 from langchain_community.chat_models import ChatAnyscale
 from langchain_community.callbacks import get_openai_callback
-from langchain.cache import InMemoryCache
+# from langchain.cache import InMemoryCache
 import langchain
 from dataclasses import dataclass
 
@@ -141,6 +141,7 @@ def get_llm(
         return AnyScaleLLM(**kwargs)
     raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models + anyscale_models}")
 
+
 class LLM:
     def __init__(self, 
                  model_name     : str = "gpt-3.5-turbo-instruct", 
@@ -197,9 +198,9 @@ class OpenAILLM(LLM):
 
         if "system_message" in kwargs:
             del kwargs["system_message"]
-
         with get_openai_callback() as cb:
             completion_response = self.llm.generate(query_list, *args, **kwargs)
+            print(completion_response)
             token_usage = cb.total_tokens
         if verbose:
             print("-" * 80)
@@ -291,7 +292,6 @@ class ChatOpenAILLM(LLM):
                 results.append(self.parse_response(gens))
         return results, token_usage
         
-
     def parse_response(self, generations):
         values, logprobs = [], []
         for gen in generations:
