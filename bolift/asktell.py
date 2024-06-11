@@ -176,6 +176,14 @@ class AskTellFewShot:
     def _inv_predict(self, queries: List[str]) -> List[DiscreteDist]:
         raise NotImplementedError
 
+    def _ask(
+        self, possible_x: List[str], best: float, aq_fxn: Callable, k: int
+    ) -> Tuple[List[str], List[float], List[float]]:
+        raise NotImplementedError
+    
+    def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
+        raise NotImplementedError
+
     def set_calibration_factor(self, calibration_factor):
         self._calibration_factor = calibration_factor
 
@@ -536,7 +544,6 @@ class AskTellFewShotTopk(AskTellFewShot):
             [aq_vals[i] for i in selected],
             [means[i] for i in selected],
         )
-
 
 
 # Code below is deprecated and will be removed in future versions

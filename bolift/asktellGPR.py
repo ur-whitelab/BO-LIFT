@@ -203,6 +203,7 @@ class AskTellGPR(AskTellFewShot):
             self._ready = True
 
         self.examples.append(example_dict)
+        self._example_count += 1
 
         if train:
             try:
@@ -227,7 +228,7 @@ class AskTellGPR(AskTellFewShot):
                       f'{85*"-"}')
                 raise ValueError(msg)
 
-    def predict(self, x: str) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
+    def predict(self, x: str, system_message: str = None) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         # Reimplement predict to avoid creating llms and the inverse prompt
         """Predict the probability distribution and values for a given x.
 
@@ -264,3 +265,48 @@ class AskTellGPR(AskTellFewShot):
         if len(x) == 1:
             return results[0]
         return results
+
+    def _ask(
+        self, possible_x: List[str], best: float, aq_fxn: Callable, k: int, system_message: str
+    ) -> Tuple[List[str], List[float], List[float]]:
+        results = self.predict(possible_x, system_message=system_message)
+        # drop empties
+        if type(results) != type([]):
+            results = [results]
+        results = [r for r in results if len(r) > 0]
+        aq_vals = [aq_fxn(r, best) for r in results]
+        selected = np.argsort(aq_vals)[::-1][:k]
+        means = [r.mean() for r in results]
+       
+        return (
+            [possible_x[i] for i in selected],
+            [aq_vals[i] for i in selected],
+            [means[i] for i in selected],
+        )
+    
+    def ask(
+        self,
+        possible_x: Union[Pool, List[str]],
+        aq_fxn: str = "upper_confidence_bound",
+        k: int = 1,
+        inv_filter: int = None,
+        aug_random_filter: int = None,
+        lambda_mult: float = 0.5,
+        _lambda: float = 0.5,
+        system_message: Optional[str] = "",
+        inv_system_message: Optional[str] = "",
+    ) -> Tuple[List[str], List[float], List[float]]:
+        if inv_filter:
+            raise ValueError("Inverse filtering not supported for GPR.")
+
+        return super().ask(
+            possible_x,
+            aq_fxn,
+            k,
+            0,
+            aug_random_filter if aug_random_filter else len(possible_x),
+            lambda_mult,
+            _lambda,
+            system_message,
+            inv_system_message,
+        )
