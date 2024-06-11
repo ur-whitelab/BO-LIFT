@@ -22,7 +22,7 @@ from langchain_openai import OpenAIEmbeddings
 from sklearn.manifold import Isomap
 
 
-class AskTellGPR(AskTellFewShot): # AskTellFewShotTopk
+class AskTellGPR(AskTellFewShot):
     def __init__(self, n_components=2, pool=None, cache_path=None, n_neighbors=5, **kwargs):
         super().__init__(**kwargs)
         self._selector_k = None # Forcing exemple_selector to not build context
