@@ -3,9 +3,10 @@ from bolift import (AskTellFewShotMulti,
                     AskTellFewShotTopk,
                     AskTellGPR,
                     AskTellNearestNeighbor,
-                    # AskTellRidgeKernelRegression,
+                    AskTellRidgeKernelRegression,
                     AskTellFinetuning,
                     Pool)
+from bolift.llm_model import openai_choice_predict
 import numpy as np
 from abc import ABC
 import pytest
@@ -84,6 +85,18 @@ class TestAskTell(ABC):
         assert asktell._example_count == 3
         assert asktell._ready == True
 
+    def test_llm_usage(self, asktell_class):
+        asktell = asktell_class(
+            x_formatter=lambda x: f"y = 2 + {x}",
+            selector_k=10,
+            y_formatter=lambda y: str(int(y)),
+        )
+        for i in range(5):
+            asktell.tell(i, 2 + i)
+        asktell.predict(3)
+        assert asktell.tokens_used > 0
+
+
 class TestAskTellMulti(TestAskTell):
     __test__ = False # turbo-instruct is consistently failing the test 
 
@@ -94,6 +107,28 @@ class TestAskTellMulti(TestAskTell):
     @classmethod
     def models_to_test(cls):
         return ["gpt-3.5-turbo-instruct"]
+
+    def test_parse_response():
+        prompt = """
+Problem 1: What is 4 x 5?
+A. 12
+B. 32
+C. 20
+D. 16
+E. 24
+
+Answer: C
+
+Problem 2: What is 4 x 4?
+"""
+        asktell = bolift.AskTellFewShotMulti(
+            x_formatter=lambda x: f"y = 2 * {x}",
+            y_formatter=lambda y: str(int(y)),
+        )
+        llm = asktell.llm
+        result, token = openai_choice_predict([prompt], llm)
+        # assert 16 in result.values.astype(int)
+        assert any([r.mean == pytest.approx(16,0.1) for r in result.values.astype(int)])
 
 
 class TestAskTellTopK(TestAskTell):
@@ -140,8 +175,23 @@ class TestAskTellKNN():
         assert abs(m - 6) <= 1.0
    
 
-class TestAskTellKRR(TestAskTell):
-    __test__ = False
+class TestAskTellKRR():
+    __test__ = True
+
+    def test_krr(self):
+        asktell = AskTellRidgeKernelRegression(
+            x_formatter=lambda x: f"y = 2+{x}",
+            y_formatter=lambda y: str(int(y)),
+        )
+        for i in range(5):
+            asktell.tell(i, 2 + i)
+        asktell.tell(5, 7)
+        assert len(asktell.examples) == 6
+        assert asktell._example_count == 6
+        
+        m = asktell.predict(5)
+        assert m.mean() == pytest.approx(7, 0.1)
+        assert asktell.ask([1, 5, 8], k=1)[0][0] in [1,5,8]
 
 
 class TestAskTellGPR():

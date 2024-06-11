@@ -697,10 +697,7 @@ class AskTellFewShotMulti(AskTellFewShot):
         return example_dict, inv_example
 
     def _predict(self, queries: List[str], system_message: str = "") -> List[DiscreteDist]:
-        m = openai_choice_predict(queries, self.llm.llm, self._verbose)
-        print(queries)
-        print(m)
-        return m
+        return openai_choice_predict(queries, self.llm.llm, self._verbose)
 
     def _inv_predict(self, queries: List[str], system_message: str = "") -> List[DiscreteDist]:
         x, tokens = self.inv_llm.predict(queries, inv_pred=True, system_message=system_message)
