@@ -16,19 +16,6 @@ import warnings
 
 # langchain.llm_cache = InMemoryCache()
 
-def wrap_chatllm(query_list, llm, system_message=None):
-    if type(query_list) == str:
-        query_list = [query_list]
-    if type(llm) == ChatOpenAI:
-        system_message_prompt = SystemMessage(
-            content=system_message
-        )
-        query_list = [
-            [system_message_prompt, HumanMessage(content=q)] for q in query_list
-        ]
-    return query_list
-
-
 def truncate(s):
     """Truncate to first number"""
     try:
@@ -326,4 +313,79 @@ class AnyScaleLLM(ChatOpenAILLM):
             max_tokens=self.max_tokens,
             model_kwargs=self.kwargs,
         )
+
+# Code below is deprecated and will be removed in future versions
+
+def wrap_chatllm(query_list, llm, system_message=""):
+    if type(query_list) == str:
+        query_list = [query_list]
+    if type(llm) == ChatOpenAI:
+        system_message_prompt = SystemMessage(
+            content=system_message
+        )
+        query_list = [
+            [system_message_prompt, HumanMessage(content=q)] for q in query_list
+        ]
+    return query_list
+
+
+def parse_response(generation, prompt, llm):
+    # first parse the options into numbers
+    text = generation.text
+    matches = re.findall(r"([A-Z])\. .*?([\+\-\d][\d\.e]*)", text)
+    values = dict()
+    k = None
+    for m in matches:
+        try:
+            k, v = m[0], float(m[1])
+            values[k] = v
+        except ValueError:
+            pass
+        k = None
+    # now get log prob of tokens after Answer:
+    tokens = generation.generation_info["logprobs"]["top_logprobs"]
+    offsets = generation.generation_info["logprobs"]["text_offset"]
+    if "Answer:" not in text:
+        # try to extend
+        c_generation = llm.generate([prompt + text + "\nAnswer:"]).generations[0][0]
+
+        logprobs = c_generation.generation_info["logprobs"]["top_logprobs"][0]
+    else:
+        # find token probs for answer
+        # feel like this is supper brittle, but not sure what else to try
+        at_answer = False
+        for i in range(len(offsets)):
+            start = offsets[i] - offsets[0]
+            end = offsets[i + 1] - offsets[0] if i < len(offsets) - 1 else -1
+            selected_token = text[start:end]
+            if "Answer" in selected_token:
+                at_answer = True
+            if at_answer and selected_token.strip() in values:
+                break
+        logprobs = tokens[i]
+    result = [
+        (values[k.strip()], v) for k, v in logprobs.items() if k.strip() in values
+    ]
+    probs = np.exp(np.array([v for k, v in result]))
+    probs = probs / np.sum(probs)
+    # return DiscreteDist(np.array([k for k, v in result]), probs)
+    return make_dd(np.array([k for k, v in result]), probs)
+
+
+def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
+    """Predict the output numbers for a given list of queries"""
+    with get_openai_callback() as cb:
+        query_list = wrap_chatllm(query_list, llm)
+        completion_response = llm.generate(query_list, *args, **kwargs)
+        token_usage = cb.total_tokens
+    if verbose:
+        print("-" * 80)
+        print(query_list[0])
+        print("-" * 80)
+        print(query_list[0], completion_response.generations[0][0].text)
+        print("-" * 80)
+    results = []
+    for gen, q in zip(completion_response.generations, query_list):
+        results.append(parse_response(gen[0], q, llm))
+    return results, token_usage
 
