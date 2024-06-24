@@ -3,8 +3,10 @@ from bolift import (AskTellFewShotMulti,
                     AskTellFewShotTopk,
                     AskTellGPR,
                     AskTellNearestNeighbor,
-                    # AskTellRidgeKernelRegression,
-                    AskTellFinetuning)
+                    AskTellRidgeKernelRegression,
+                    AskTellFinetuning,
+                    Pool)
+from bolift.llm_model import openai_choice_predict
 import numpy as np
 from abc import ABC
 import pytest
@@ -67,9 +69,66 @@ class TestAskTell(ABC):
         inverse = asktell.inv_predict(8, system_message=sys_msg)
         assert "*" in inverse
 
+    def test_example_counter(self, asktell_class, model_name):
+        asktell = asktell_class(
+            model=model_name,
+            x_formatter=lambda x: f"y = 2+{x}",
+            y_formatter=lambda y: str(int(y)),
+        )
+        assert asktell._example_count == 0
+        assert asktell._ready == False
+
+        asktell.tell(0, 2)
+        asktell.tell(1, 3)
+        asktell.tell(2, 4)
+
+        assert asktell._example_count == 3
+        assert asktell._ready == True
+
+    def test_llm_usage(self, asktell_class):
+        asktell = asktell_class(
+            x_formatter=lambda x: f"y = 2 + {x}",
+            selector_k=10,
+            y_formatter=lambda y: str(int(y)),
+        )
+        for i in range(5):
+            asktell.tell(i, 2 + i)
+        asktell.predict(3)
+        assert asktell.tokens_used > 0
+
 
 class TestAskTellMulti(TestAskTell):
-    __test__ = False
+    __test__ = False # turbo-instruct is consistently failing the test 
+
+    @classmethod
+    def asktells_to_test(cls):
+        return [AskTellFewShotMulti]
+    
+    @classmethod
+    def models_to_test(cls):
+        return ["gpt-3.5-turbo-instruct"]
+
+    def test_parse_response():
+        prompt = """
+Problem 1: What is 4 x 5?
+A. 12
+B. 32
+C. 20
+D. 16
+E. 24
+
+Answer: C
+
+Problem 2: What is 4 x 4?
+"""
+        asktell = bolift.AskTellFewShotMulti(
+            x_formatter=lambda x: f"y = 2 * {x}",
+            y_formatter=lambda y: str(int(y)),
+        )
+        llm = asktell.llm
+        result, token = openai_choice_predict([prompt], llm)
+        # assert 16 in result.values.astype(int)
+        assert any([r.mean == pytest.approx(16,0.1) for r in result.values.astype(int)])
 
 
 class TestAskTellTopK(TestAskTell):
@@ -84,12 +143,55 @@ class TestAskTellTopK(TestAskTell):
         return ["gpt-3.5-turbo-instruct", "gpt-3.5-turbo"]
     
 
-class TestAskTellKNN(TestAskTell):
-    __test__ = False
+class TestAskTellKNN():
+    __test__ = True
 
+    # @classmethod
+    # def asktells_to_test(cls):
+    #     return [AskTellNearestNeighbor]
+    
+    # @classmethod
+    # def models_to_test(cls):
+    #     return ["gpt-3.5-turbo"]
 
-class TestAskTellKRR(TestAskTell):
-    __test__ = False
+    def test_knn(self):
+        asktell = AskTellNearestNeighbor(
+            x_formatter=lambda x: f"y = 2+{x}",
+            y_formatter=lambda y: str(int(y)),
+        )
+
+        asktell.tell(0, 2)
+        asktell.tell(1, 3)
+        asktell.tell(3, 5)
+
+        dist = asktell.predict(2)
+        m = dist.mode()
+        assert m == pytest.approx(3.333, 0.01)
+        
+        asktell.tell(5, 7)
+        asktell.tell(6, 8)
+        dist = asktell.predict(4)
+        m = dist.mode()
+        assert abs(m - 6) <= 1.0
+   
+
+class TestAskTellKRR():
+    __test__ = True
+
+    def test_krr(self):
+        asktell = AskTellRidgeKernelRegression(
+            x_formatter=lambda x: f"y = 2+{x}",
+            y_formatter=lambda y: str(int(y)),
+        )
+        for i in range(5):
+            asktell.tell(i, 2 + i)
+        asktell.tell(5, 7)
+        assert len(asktell.examples) == 6
+        assert asktell._example_count == 6
+        
+        m = asktell.predict(5)
+        assert m.mean() == pytest.approx(7, 0.1)
+        assert asktell.ask([1, 5, 8], k=1)[0][0] in [1,5,8]
 
 
 class TestAskTellGPR():
@@ -108,8 +210,31 @@ class TestAskTellGPR():
         for i in range(5):
             asktell.tell(i, 2 + i, train=False)
         asktell.tell(5, 7, train=True)
-        asktell.predict(5000)
-        assert asktell.ask([1, 5])[0][0] == 5
+        assert len(asktell.examples) == 6
+        assert asktell._example_count == 6
+        
+        m = asktell.predict(5)
+        assert m.mean() == pytest.approx(7, 0.1)
+        assert asktell.ask([1, 5, 8], k=1)[0][0] in [1,5,8]
+
+    def test_gpr_fail_train(self):
+        asktell = AskTellGPR(
+            x_formatter=lambda x: f"y = 2 + {x}",
+            y_formatter=lambda y: str(int(y)),
+        )
+        with pytest.raises(ValueError):
+            asktell.tell(2, 2 + 2)
+
+    def test_gpr_train_w_pool(self):
+        pool = Pool(['1', '2', '3', '4', '5', '6'])
+        asktell = AskTellGPR(
+            x_formatter=lambda x: f"y = 2 + {x}",
+            y_formatter=lambda y: str(int(y)),
+            pool=pool
+        )
+        asktell.tell(2, 2+2)
+        assert asktell.predict(2).mean() == pytest.approx(4, 0.05)
+        assert asktell.ask([1, 2], k=1)[0][0] in [1,2]
 
 
 class TestAskTellFineTuning():

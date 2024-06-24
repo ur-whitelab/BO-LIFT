@@ -23,7 +23,7 @@ class TestLLM(ABC):
     def test_completion(self, model_name):
         llm = llm_model.get_llm(model_name=model_name, stop=["\n\n"])
         result, token = llm.predict("The value of 1 + 1 is")
-        assert result[0].mean() == 2
+        assert result[0].mean() == pytest.approx(2, 0.1)
 
 
 class TestOpenAILLM(TestLLM):

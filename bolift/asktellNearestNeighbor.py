@@ -1,19 +1,22 @@
 import numpy as np
 
 from typing import *
-from .asktell import AskTellFewShotTopk
+from .asktell import AskTellFewShot
 from .llm_model import GaussDist
 from langchain.prompts.few_shot import FewShotPromptTemplate
 from langchain.prompts.prompt import PromptTemplate
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS, Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain.prompts.example_selector import SemanticSimilarityExampleSelector
 
 
-class AskTellNearestNeighbor(AskTellFewShotTopk):
-    def __init__(self, knn=1, **kwargs):
+class AskTellNearestNeighbor(AskTellFewShot):
+    def __init__(self, knn=3, **kwargs):
         super().__init__(selector_k=knn, **kwargs)
         self.knn = knn
+
+    def ask(self, **kwargs):
+        raise NotImplementedError("Nearest neighbor does not support asking.")
 
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
         """Tell the optimizer about a new example."""
@@ -28,10 +31,10 @@ class AskTellNearestNeighbor(AskTellFewShotTopk):
         return example_dict
 
     def tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> None:
+        # Reimplement tell to remove inverse objects
         """Tell the optimizer about a new example."""
         example_dict = self._tell(x, y, alt_ys)
-        # we want to have example
-        # to initialize prompts, so send it
+
         if not self._ready:
             self.prompt = self._setup_prompt(
                 example_dict, self._prompt_template, self._suffix, self._prefix
@@ -82,7 +85,7 @@ class AskTellNearestNeighbor(AskTellFewShotTopk):
             ) = SemanticSimilarityExampleSelector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
-                Chroma,
+                FAISS,
                 k=self._selector_k,
             )
         return FewShotPromptTemplate(
@@ -107,11 +110,10 @@ class AskTellNearestNeighbor(AskTellFewShotTopk):
             self.prompt.example_selector.k = min(self._example_count, self._selector_k)
 
         selected = [
-            self.prompt.example_selector.select_examples({"x": x_i}) for x_i in x
+            self.prompt.example_selector.select_examples({"x": self.format_x(x_i)}) for x_i in x
         ]
 
         predictions = [[float(s["y"]) for s in selected_i] for selected_i in selected]
-
         results = [GaussDist(np.mean(p), np.std(p)) for p in predictions]
 
         if len(x) == 1:
