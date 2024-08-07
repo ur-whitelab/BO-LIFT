@@ -12,7 +12,7 @@ __pycache__/
 IBMPlexMono-Regular.ttf
 .vscode
 .DS_Store
-paper/
+**paper
 *.png
 *.ipynb
 
