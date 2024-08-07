@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Type
+from typing import Dict, List, Any, Type, Union
 from pydantic import BaseModel, Field
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
@@ -73,10 +73,10 @@ class LabelSimilarityExampleSelector(SemanticSimilarityExampleSelector):
                       embeddings: Embeddings,
                       vectorstore_cls: type[VectorStore],
                       k: int = 4,
-                      input_keys: List[str] | None = None,
+                      input_keys: Union[List[str], None] = None,
                       *,
-                      example_keys: List[str] | None = None,
-                      vectorstore_kwargs: Dict | None = None,
+                      example_keys: Union[List[str], None] = None,
+                      vectorstore_kwargs: Union[Dict, None] = None,
                       **vectorstore_cls_kwargs: Any):
         new_class = super().from_examples(examples, embeddings, vectorstore_cls, k, input_keys, example_keys=example_keys, vectorstore_kwargs=vectorstore_kwargs, **vectorstore_cls_kwargs)
         new_class.examples = examples
