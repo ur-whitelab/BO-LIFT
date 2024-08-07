@@ -106,7 +106,7 @@ def get_llm(
         **kwargs
     ):
     openai_models = ["davinci-002", "gpt-3.5-turbo-instruct"]
-    chatopenai_models = ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo-preview", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]
+    chatopenai_models = ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo-preview", "gpt-3.5-turbo-0125", "gpt-4-0125-preview", "gpt-4o", "gpt-4o-mini"]
     anyscale_models = ["meta-llama/Llama-2-7b-chat-hf","meta-llama/Llama-2-13b-chat-hf","meta-llama/Llama-2-70b-chat-hf", "mistralai/Mistral-7B-Instruct-v0.1", "mistralai/Mixtral-8x7B-Instruct-v0.1"]
     
     kwargs = {
@@ -126,7 +126,7 @@ def get_llm(
         return ChatOpenAILLM(**kwargs)
     if model_name in anyscale_models:
         return AnyScaleLLM(**kwargs)
-    raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models + anyscale_models}")
+    raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models}")
 
 
 class LLM:
@@ -138,6 +138,7 @@ class LLM:
                  best_of        : int = 1, 
                  max_tokens     : int = 128, 
                  logit_bias     : dict = {},
+                 use_logprobs   : bool = False,
                  **kwargs
                 ) -> None:
         self.model_name = model_name
@@ -149,6 +150,7 @@ class LLM:
         self.logit_bias = logit_bias
         self.kwargs = kwargs
         self.llm = self.create_llm()
+        self.use_logprobs = use_logprobs
 
     def create_llm(self):
         raise NotImplementedError("Must be implemented in subclasses")
@@ -187,7 +189,6 @@ class OpenAILLM(LLM):
             del kwargs["system_message"]
         with get_openai_callback() as cb:
             completion_response = self.llm.generate(query_list, *args, **kwargs)
-            print(completion_response)
             token_usage = cb.total_tokens
         if verbose:
             print("-" * 80)
@@ -212,13 +213,16 @@ class OpenAILLM(LLM):
                 values.append(v)
             except ValueError:
                 continue
-            # can do inner sum because there is only one token
-            lp = sum(
-                [
-                    sum(reduce(lambda a, b: {**a, **b}, gen.generation_info["logprobs"]["top_logprobs"]).values())
-                ]
-            )
-            logprobs.append(lp)
+            if self.use_logprobs:            
+                # can do inner sum because there is only one token
+                lp = sum(
+                    [
+                        sum(reduce(lambda a, b: {**a, **b}, gen.generation_info["logprobs"]["top_logprobs"]).values())
+                    ]
+                )
+                logprobs.append(lp)
+            else:
+                logprobs.append(np.log(1.0))
 
         probs = np.exp(np.array(logprobs))
         probs = probs / np.sum(probs)
@@ -287,11 +291,14 @@ class ChatOpenAILLM(LLM):
                 values.append(v)
             except ValueError:
                 continue
-            lp = sum(
-                p['logprob'] for p in  gen.generation_info["logprobs"]["content"]
-            )
-            logprobs.append(lp)
-
+            if self.use_logprobs:
+                lp = sum(
+                    p['logprob'] for p in  gen.generation_info["logprobs"]["content"]
+                )
+                logprobs.append(lp)
+            else:
+                logprobs.append(np.log(1.0))
+        
         probs = np.exp(np.array(logprobs))
         probs = probs / np.sum(probs)
 

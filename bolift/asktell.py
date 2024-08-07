@@ -107,6 +107,7 @@ class AskTellFewShot:
         n_quantiles: int                    = 100,
         verbose: bool                       = False,
         cos_sim: bool                       = True,
+        use_logprobs: bool                  = False,
     ) -> None:
         """Initialize Ask-Tell optimizer.
 
@@ -148,6 +149,7 @@ class AskTellFewShot:
         self._verbose = verbose
         self.tokens_used = 0
         self.cos_sim = cos_sim
+        self.use_logprobs = use_logprobs
 
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         raise NotImplementedError
@@ -385,6 +387,7 @@ class AskTellFewShotTopk(AskTellFewShot):
                 "50256": -100,  # endoftext
             },
             max_tokens=256,
+            use_logprobs=self.use_logprobs,
         )
 
     def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
