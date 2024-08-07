@@ -296,17 +296,17 @@ class AskTellGPR(AskTellFewShot):
         system_message: Optional[str] = "",
         inv_system_message: Optional[str] = "",
     ) -> Tuple[List[str], List[float], List[float]]:
-        if inv_filter:
-            raise ValueError("Inverse filtering not supported for GPR.")
+        # if inv_filter:
+        #     raise ValueError("Inverse filtering not supported for GPR.")
 
         return super().ask(
             possible_x,
             aq_fxn,
             k,
-            0,
-            aug_random_filter if aug_random_filter else len(possible_x),
-            lambda_mult,
-            _lambda,
-            system_message,
-            inv_system_message,
+            inv_filter = 0,
+            aug_random_filter = aug_random_filter if aug_random_filter else len(possible_x),
+            lambda_mult=lambda_mult,
+            _lambda=_lambda,
+            system_message=system_message,
+            inv_system_message=inv_system_message,
         )
