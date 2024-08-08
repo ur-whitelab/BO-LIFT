@@ -122,11 +122,14 @@ def get_llm(
 
     if model_name in openai_models:
         return OpenAILLM(**kwargs)
-    if model_name in chatopenai_models:
+    elif model_name in chatopenai_models:
         return ChatOpenAILLM(**kwargs)
-    if model_name in anyscale_models:
+    elif model_name in anyscale_models:
         return AnyScaleLLM(**kwargs)
-    raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models}")
+    else:
+        warnings.warn(f"Model {model_name} not explicitly supported. Please choose from {openai_models + chatopenai_models + anyscale_models}\n\nWe will try to use this model as a ChatOpenAI model.")
+        return ChatOpenAILLM(**kwargs)
+        # raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models}")
 
 
 class LLM:
