@@ -103,10 +103,11 @@ def get_llm(
         best_of         : int   = 1,
         max_tokens      : int   = 128,
         logit_bias      : dict  = {},
+        logprobs        : int= 5,
         **kwargs
     ):
     openai_models = ["davinci-002", "gpt-3.5-turbo-instruct"]
-    chatopenai_models = ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo-preview", "gpt-3.5-turbo-0125", "gpt-4-0125-preview", "gpt-4o", "gpt-4o-mini"]
+    chatopenai_models = ["gpt-4","gpt-4o", "gpt-3.5-turbo", "gpt-4-turbo-preview", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]
     anyscale_models = ["meta-llama/Llama-2-7b-chat-hf","meta-llama/Llama-2-13b-chat-hf","meta-llama/Llama-2-70b-chat-hf", "mistralai/Mistral-7B-Instruct-v0.1", "mistralai/Mixtral-8x7B-Instruct-v0.1"]
     
     kwargs = {
@@ -117,6 +118,7 @@ def get_llm(
         "best_of": best_of,
         "max_tokens": max_tokens,
         "logit_bias": logit_bias,
+        # "logprobs" : logprobs,
         **kwargs
     }
 
@@ -181,7 +183,8 @@ class OpenAILLM(LLM):
             best_of=self.best_of,
             max_tokens=self.max_tokens,
             logit_bias=self.logit_bias,
-            model_kwargs=self.kwargs
+            model_kwargs=self.kwargs,
+            
         )
     
     def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
@@ -247,7 +250,9 @@ class ChatOpenAILLM(LLM):
             temperature=self.temperature,
             n=self.n,
             max_tokens=self.max_tokens,
-            model_kwargs=self.kwargs,
+            logprobs=True,
+            top_logprobs=5
+            # model_kwargs=self.kwargs,
         )
 
     def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
