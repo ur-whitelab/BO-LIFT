@@ -325,6 +325,7 @@ class AskTellFewShot:
                 [0] * k,
                 [0] * k,
                 [0] * k,
+                [0] * k
             )
 
         if aq_fxn == "probability_of_improvement":
@@ -343,6 +344,7 @@ class AskTellFewShot:
                 [0] * k,
                 [0] * k,
                 [0] * k,
+                [0] * k
 
             )
         else:
