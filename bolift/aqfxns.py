@@ -80,13 +80,15 @@ def greedy_d(probs, values, best):
 
 def expected_improvement_g(mean, std, best):
     """Expected improvement for the given Gaussian distribution"""
-    z = (mean - best) / std
+    eps=1e-15
+    z = (mean - best) / (std+eps)
     ei = (mean - best) * norm.cdf(z) + std * norm.pdf(z)
     return ei
 
 def log_expected_improvement_g(mean, std, best):
     """Log Expected improvement for the given Gaussian distribution"""
-    z = (mean - best) / std 
+    eps=1e-15
+    z = (mean - best) / (std+eps)
     # ei = std * h(z)
     # ei = std * (norm.pdf(z) + z * norm.cdf(z))
     log_ei = np.log(std) + np.log((norm.pdf(z) + z * norm.cdf(z)))
@@ -94,14 +96,16 @@ def log_expected_improvement_g(mean, std, best):
 
 def probability_of_improvement_g(mean, std, best):
     """Probability of improvement for the given Gaussian distribution"""
-    z = (mean - best) / std
+    eps=1e-15
+    z = (mean - best) / (std+eps)
     pi = norm.cdf(z)
     return pi
 
 
 def upper_confidence_bound_g(mean, std, best, _lambda):
     """Upper confidence bound for the given Gaussian distribution"""
-    return mean + _lambda * std
+    eps=1e-15
+    return mean + _lambda * (std+eps)
 
 
 def greedy_g(mean, std, best):
