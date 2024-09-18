@@ -145,7 +145,7 @@ class AskTellFewShot:
         self._answer_choices = _answer_choices[:k]
         self.use_quantiles = use_quantiles
         self.n_quantiles = n_quantiles
-        self._calibration_factor = None
+        self._calibration_factor = 1.0
         self._verbose = verbose
         self.tokens_used = 0
         self.cos_sim = cos_sim
@@ -309,6 +309,7 @@ class AskTellFewShot:
             aug_random_filter: Add this man y random examples to the pool to increase diversity after reducing pool with inverse model
             _lambda: Lambda value to use for UCB
             lambda_mult: control MMR diversity ,0-1 lower = more diverse
+
         Return:
             The selected x values, their acquisition function values, and the predicted y modes.
             Sorted by acquisition function value (descending)
@@ -321,6 +322,7 @@ class AskTellFewShot:
             init_pnt=possible_x.sample(k)
             return (
                 init_pnt,
+                [0] * k,
                 [0] * k,
                 [0] * k,
             )
@@ -340,6 +342,8 @@ class AskTellFewShot:
                 possible_x.sample(k),
                 [0] * k,
                 [0] * k,
+                [0] * k,
+
             )
         else:
             raise ValueError(f"Unknown acquisition function: {aq_fxn}")
@@ -352,7 +356,7 @@ class AskTellFewShot:
         if inv_filter+aug_random_filter < len(possible_x):
             possible_x_l = []
             if inv_filter:
-                approx_x = self.inv_predict(best * np.random.normal(1.2, 0.05), system_message=inv_system_message)
+                approx_x = self.inv_predict(best + np.abs(best)*np.random.normal(0.2, 0.05), system_message=inv_system_message)
                 possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter, lambda_mult=lambda_mult))
 
             if aug_random_filter:
@@ -367,6 +371,8 @@ class AskTellFewShot:
                 possible_x.sample(k),
                 [0] * k,
                 [0] * k,
+                [0] * k,
+                [0] * k
             )
         return results
 
@@ -456,7 +462,7 @@ class AskTellFewShotTopk(AskTellFewShot):
     def _setup_inverse_prompt(self, example: Dict):
         prompt_template = PromptTemplate(
             input_variables=["x", "y", "y_name", "x_name"],
-            template="If {y_name} is {y}, then {x_name} is @@@\n{x}###",
+            template="If {y_name} is {y}, then the {x_name} is @@@\n{x}###",
         )
         if example is not None:
             prompt_template.format(**example)
@@ -468,7 +474,7 @@ class AskTellFewShotTopk(AskTellFewShot):
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
             
-            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector #LabelSimilarityExampleSelector 
+            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector # LabelSimilarityExampleSelector 
             example_selector = sim_selector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
@@ -541,11 +547,13 @@ class AskTellFewShotTopk(AskTellFewShot):
         aq_vals = [aq_fxn(r, best) for r in results]
         selected = np.argsort(aq_vals)[::-1][:k]
         means = [r.mean() for r in results]
+        stds = [r.std() for r in results]
        
         return (
             [possible_x[i] for i in selected],
             [aq_vals[i] for i in selected],
             [means[i] for i in selected],
+            [stds[i] for i in selected],
         )
 
 
