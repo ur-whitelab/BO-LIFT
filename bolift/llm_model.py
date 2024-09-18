@@ -238,16 +238,18 @@ class OpenAILLM(LLM):
 
 class ChatOpenAILLM(LLM):
     def create_llm(self):
-        self.kwargs.update({
-            "logprobs": True,
-            "top_logprobs": 5
-        })
+        # self.kwargs.update({
+        #     "logprobs": True,
+        #     "top_logprobs": 5
+        # })
         return ChatOpenAI(
             model_name=self.model_name,
             temperature=self.temperature,
             n=self.n,
             max_tokens=self.max_tokens,
-            model_kwargs=self.kwargs,
+            logprobs= True,
+            top_logprobs= 5,
+            #model_kwargs=self.kwargs,
         )
 
     def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):

@@ -203,7 +203,7 @@ class AskTellFewShot:
             query,
             system_message=system_message
             )
-
+        print(x[0]) #remove later
         return x[0]
 
     def predict(self, x: str, system_message: Optional[str] = "") -> Union[Tuple[float, float], List[Tuple[float, float]]]:
@@ -324,7 +324,6 @@ class AskTellFewShot:
                 init_pnt,
                 [0] * k,
                 [0] * k,
-                [0] * k,
                 [0] * k
             )
 
@@ -344,8 +343,6 @@ class AskTellFewShot:
                 [0] * k,
                 [0] * k,
                 [0] * k,
-                [0] * k
-
             )
         else:
             raise ValueError(f"Unknown acquisition function: {aq_fxn}")
@@ -374,7 +371,6 @@ class AskTellFewShot:
                 [0] * k,
                 [0] * k,
                 [0] * k,
-                [0] * k
             )
         return results
 
@@ -714,6 +710,7 @@ class AskTellFewShotMulti(AskTellFewShot):
 
     def _inv_predict(self, queries: List[str], system_message: str = "") -> List[DiscreteDist]:
         x, tokens = self.inv_llm.predict(queries, inv_pred=True, system_message=system_message)
+
         return x, tokens
 
     def _ask(
