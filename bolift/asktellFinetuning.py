@@ -178,7 +178,9 @@ class AskTellFinetuning():
             system_message=system_message
         )
         self.tokens_used += tokens
-        return results, tokens
+        if len(x) == 1:
+            return results[0]
+        return results
 
     def _setup_prompt(self, 
                       example: Dict, 
