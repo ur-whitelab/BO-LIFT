@@ -379,13 +379,13 @@ class AskTellFewShotTopk(AskTellFewShot):
             best_of=self._k,
             temperature=0.1 if temperature is None else temperature,
             model_name=model,
-            top_p=1.0,
+            top_p=0.5,
             # stop=["\n", "###", "#", "##"],
-            logit_bias={
-                "198": -100,  # new line,
-                "628": -100,  # double new line,
-                "50256": -100,  # endoftext
-            },
+            # logit_bias={
+            #     "198": -100,  # new line,
+            #     "628": -100,  # double new line,
+            #     "50256": -100,  # endoftext
+            # },
             max_tokens=256,
             use_logprobs=self.use_logprobs,
         )
