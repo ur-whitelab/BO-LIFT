@@ -147,7 +147,7 @@ class AskTellFewShot:
         self._answer_choices = _answer_choices[:k]
         self.use_quantiles = use_quantiles
         self.n_quantiles = n_quantiles
-        self._calibration_factor = 1.0
+        self._calibration_factor = None
         self._verbose = verbose
         self.tokens_used = 0
         self.cos_sim = cos_sim
