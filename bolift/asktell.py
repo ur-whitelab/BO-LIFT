@@ -96,6 +96,7 @@ class AskTellFewShot:
         suffix: Optional[str]               = None,
         prefix: Optional[str]               = None,
         model: str                          = "gpt-3.5-turbo",
+        inv_model: str                      = None,
         temperature: Optional[float]        = None,
         x_formatter: Callable[[str], str]   = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
@@ -138,6 +139,7 @@ class AskTellFewShot:
         self._prompt_template = prompt_template
         self._prefix = prefix
         self._suffix = suffix
+        self._inv_model = inv_model if inv_model is not None else model
         self._model = model
         self._example_count = 0
         self._temperature = temperature
@@ -154,7 +156,7 @@ class AskTellFewShot:
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         raise NotImplementedError
     
-    def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
+    def _setup_inv_llm(self, inv_model: str, temperature: Optional[float] = None):
         raise NotImplementedError
     
     def _setup_prompt(
@@ -275,7 +277,7 @@ class AskTellFewShot:
             )
             self.inv_prompt = self._setup_inverse_prompt(inv_example)
             self.llm = self._setup_llm(self._model, self._temperature)
-            self.inv_llm = self._setup_inv_llm(self._model, self._temperature)
+            self.inv_llm = self._setup_inv_llm(self._inv_model, self._temperature)
             self._ready = True
         else:
             # in else, so we don't add twice
@@ -384,7 +386,7 @@ class AskTellFewShotTopk(AskTellFewShot):
             temperature=0.1 if temperature is None else temperature,
             model_name=model,
             top_p=1.0,
-            # stop=["\n", "###", "#", "##"],
+            stop=["\n", "###", "#", "##"],
             logit_bias={
                 "198": -100,  # new line,
                 "628": -100,  # double new line,
@@ -394,9 +396,9 @@ class AskTellFewShotTopk(AskTellFewShot):
             use_logprobs=self.use_logprobs,
         )
 
-    def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
+    def _setup_inv_llm(self, inv_model: str, temperature: Optional[float] = None):
         return get_llm(
-            model_name=model,
+            model_name=inv_model,
             # stop=[
             #     self.prompt.suffix.split()[0],
             #     self.inv_prompt.suffix.split()[0],
@@ -571,9 +573,9 @@ class AskTellFewShotMulti(AskTellFewShot):
             temperature=0.05 if temperature is None else temperature,
         )
 
-    def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
+    def _setup_inv_llm(self, inv_model: str, temperature: Optional[float] = None):
         return get_llm(
-            model_name=model,
+            model_name=inv_model,
             # stop=[
             #     self.prompt.suffix.split()[0],
             #     self.inv_prompt.suffix.split()[0],
