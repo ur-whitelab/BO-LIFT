@@ -239,14 +239,16 @@ class OpenAILLM(LLM):
 class ChatOpenAILLM(LLM):
     def create_llm(self):
         self.kwargs.update({
-            "logprobs": True,
-            "top_logprobs": 5
+            # "logprobs": True,
+            # "top_logprobs": 5
         })
         return ChatOpenAI(
             model_name=self.model_name,
             temperature=self.temperature,
             n=self.n,
             max_tokens=self.max_tokens,
+            logprobs=True,
+            top_logprobs=5,
             model_kwargs=self.kwargs,
         )
 
@@ -271,6 +273,7 @@ class ChatOpenAILLM(LLM):
         with get_openai_callback() as cb:
             completion_response = self.llm.generate(query_list, *args, **kwargs)
             token_usage = cb.total_tokens
+
         if verbose:
             print("-" * 80)
             print(query_list[0])
@@ -312,6 +315,7 @@ class ChatOpenAILLM(LLM):
    
 
 class AnyScaleLLM(ChatOpenAILLM):
+    # TODO: Implement support to llama models.
     def create_llm(self):
         if "logprobs" in self.kwargs:
             del self.kwargs["logprobs"] # not supported
