@@ -370,25 +370,30 @@ class AnthropicLLM(LLM):
             content=system_message
         )
         query_list = [
-            [system_message_prompt, HumanMessage(content=q)] for q in query_list
+            [
+                [system_message_prompt, HumanMessage(content=q)] 
+                for _ in range(self.n)
+            ]
+            for q in query_list
         ]
         
+        
         completion_responses = [
-            [
-                self.llm.generate(q, *args, **kwargs)
-                for _ in range(self.n)
-                ] 
-                for q in query_list
+            self.llm.generate(q, *args, **kwargs)
+            for q in query_list
             ]
+        # completion_responses = self.llm.generate(query_list, *args, **kwargs)
 
         results = []
         token_usage = 0
         for gens in completion_responses:
-            token_usage += gens[0].message.usage_metadata['total_tokens']
+            token_usage += sum(
+                [gen[0].message.usage_metadata['total_tokens'] for gen in gens.generations]
+            )
             if inv_pred:
                 results.append(self.parse_inv_response(gens))
             else:
-                results.append(self.parse_response(gens))
+                results.append(self.parse_response(gens.generations))
             # results.append(gens[0].message.content)
 
         return results, token_usage
@@ -397,7 +402,7 @@ class AnthropicLLM(LLM):
         values, logprobs = [], []
         for gen in generations:
             try:
-                v = float(truncate(gen.text))
+                v = float(truncate(gen[0].text))
                 values.append(v)
             except ValueError:
                 continue
@@ -405,9 +410,7 @@ class AnthropicLLM(LLM):
             logprobs.append(np.log(1.0))
         
         probs = np.exp(np.array(logprobs))
-        print(probs)
         probs = probs / np.sum(probs)
-        print(probs)
 
         return make_dd(np.array(values), probs)
     
@@ -496,6 +499,9 @@ if __name__ == "__main__":
 
     llm = AnthropicLLM(n=5)
     # p = llm.predict(["Hello, Claude", "How are you?"])
-    p = llm.predict(["Hello, Claude, How are you?"], system_message="You are a rebot who can do math. Anwer only the number referent to the answer of the mathematical operation. Nothing else.")
+    p = llm.predict(
+                    ["Hello, Claude. What is 2 + 2?", "Hello, Claude. What is 2 + 3?"], 
+                    system_message="You are a rebot who can do math. Anwer only the number referent to the answer of the mathematical operation. Nothing else."
+                    )
 
     print(p)
