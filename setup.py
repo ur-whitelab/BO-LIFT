@@ -19,6 +19,7 @@ setup(
         "langchain",
         "langchain_community",
         "langchain_openai",
+        "langchain_anthropic",
         "openai",
         "faiss-cpu",
         "scipy",
