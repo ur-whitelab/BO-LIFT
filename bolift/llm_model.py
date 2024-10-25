@@ -3,6 +3,7 @@ import os
 import re
 import openai
 from langchain_openai import OpenAI, ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_community.chat_models import ChatAnyscale
 from langchain_community.callbacks import get_openai_callback
 # from langchain.cache import InMemoryCache
@@ -96,7 +97,7 @@ def make_dd(values, probs):
 
 
 def get_llm(
-        model_name      : str   = "gpt-3.5-turbo",
+        model_name      : str   = "gpt-4o",
         temperature     : float = 0.7,
         n               : int   = 5,
         top_p           : int   = 1,
@@ -108,6 +109,7 @@ def get_llm(
     openai_models = ["davinci-002", "gpt-3.5-turbo-instruct"]
     chatopenai_models = ["gpt-4", "gpt-3.5-turbo", "gpt-4-turbo-preview", "gpt-3.5-turbo-0125", "gpt-4-0125-preview", "gpt-4o", "gpt-4o-mini"]
     anyscale_models = ["meta-llama/Llama-2-7b-chat-hf","meta-llama/Llama-2-13b-chat-hf","meta-llama/Llama-2-70b-chat-hf", "mistralai/Mistral-7B-Instruct-v0.1", "mistralai/Mixtral-8x7B-Instruct-v0.1"]
+    anthropic_models = ["claude-3-haiku-20240307", "claude-3-5-sonnet-20240620", "claude-3-opus-20240229"]
     
     kwargs = {
         "model_name": model_name,
@@ -126,15 +128,17 @@ def get_llm(
         return ChatOpenAILLM(**kwargs)
     elif model_name in anyscale_models:
         return AnyScaleLLM(**kwargs)
+    elif model_name in anthropic_models:
+        return AnthropicLLM(**kwargs)
     else:
-        warnings.warn(f"Model {model_name} not explicitly supported. Please choose from {openai_models + chatopenai_models + anyscale_models}\n\nWe will try to use this model as a ChatOpenAI model.")
+        warnings.warn(f"Model {model_name} not explicitly supported. Please choose from {openai_models + chatopenai_models + anyscale_models + anthropic_models}\n\nWe will try to use this model as a ChatOpenAI model.")
         return ChatOpenAILLM(**kwargs)
         # raise ValueError(f"Model {model_name} not supported. Please choose from {openai_models + chatopenai_models}")
 
 
 class LLM:
     def __init__(self, 
-                 model_name     : str = "gpt-3.5-turbo-instruct", 
+                 model_name     : str = "gpt-4o", 
                  temperature    : float = 0.7, 
                  n              : int = 1, 
                  top_p          : int = 1, 
@@ -328,6 +332,92 @@ class AnyScaleLLM(ChatOpenAILLM):
             model_kwargs=self.kwargs,
         )
 
+
+class AnthropicLLM(LLM):
+    def create_llm(self):
+        import anthropic
+
+        self.kwargs.update({
+            # "logprobs": True,
+            # "top_logprobs": 5,
+            "n": self.n,
+            "best_of": self.best_of,
+        })
+
+        return ChatAnthropic(
+            model = "claude-3-haiku-20240307",
+            temperature=self.temperature,
+            top_p=self.top_p,
+            max_tokens=self.max_tokens,
+        )
+
+    def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
+        if type(query_list) == str:
+            query_list = [query_list]
+        
+        if "system_message" in kwargs:
+            system_message = kwargs["system_message"]
+            del kwargs["system_message"]
+        else:
+            system_message = ""
+            warnings.warn("`system_message` not provided. Not clearly specifying the task for the LLM usually decreases its performance considerably. Please provide a system_message for ChatOpenAI models when invoking the `predict` method.")
+        
+        if self.use_logprobs:
+            self.use_logprobs = False
+            warnings.warn("Logprobs not supported for Anthropic models. Ignoring `use_logprobs` parameter.")
+
+        system_message_prompt = SystemMessage(
+            content=system_message
+        )
+        query_list = [
+            [
+                [system_message_prompt, HumanMessage(content=q)] 
+                for _ in range(self.n)
+            ]
+            for q in query_list
+        ]
+        
+        
+        completion_responses = [
+            self.llm.generate(q, *args, **kwargs)
+            for q in query_list
+            ]
+        # completion_responses = self.llm.generate(query_list, *args, **kwargs)
+
+        results = []
+        token_usage = 0
+        for gens in completion_responses:
+            token_usage += sum(
+                [gen[0].message.usage_metadata['total_tokens'] for gen in gens.generations]
+            )
+            if inv_pred:
+                results.append(self.parse_inv_response(gens))
+            else:
+                results.append(self.parse_response(gens.generations))
+            # results.append(gens[0].message.content)
+
+        return results, token_usage
+
+    def parse_response(self, generations):
+        values, logprobs = [], []
+        for gen in generations:
+            try:
+                v = float(truncate(gen[0].text))
+                values.append(v)
+            except ValueError:
+                continue
+
+            logprobs.append(np.log(1.0))
+        
+        probs = np.exp(np.array(logprobs))
+        probs = probs / np.sum(probs)
+
+        return make_dd(np.array(values), probs)
+    
+    def parse_inv_response(self, generations):
+        return generations[0].text
+
+
 # Code below is deprecated and will be removed in future versions
 
 def wrap_chatllm(query_list, llm, system_message=""):
@@ -403,3 +493,15 @@ def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
         results.append(parse_response(gen[0], q, llm))
     return results, token_usage
 
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    load_dotenv("./paper/.env")
+
+    llm = AnthropicLLM(n=5)
+    # p = llm.predict(["Hello, Claude", "How are you?"])
+    p = llm.predict(
+                    ["Hello, Claude. What is 2 + 2?", "Hello, Claude. What is 2 + 3?"], 
+                    system_message="You are a rebot who can do math. Anwer only the number referent to the answer of the mathematical operation. Nothing else."
+                    )
+
+    print(p)
