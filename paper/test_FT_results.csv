@@ -1,0 +1,2 @@
+y;yhat;yprobs;data;model;Temperature;k_selected;N_train;model_class;n_tokens;x
+7.63;8.82;0;ocm;finetune;0.7;5;1000;topk;180;To synthesize Mn-Na2WO4/ZrO2, ZrO2 (1.0 g) was impregnated with 4.5 mL of an aqueous solution consisting of Mn (0.37 mol), Na (0.37 mol), W (0.185 mol), at 50 ºC for 6 h. Once activated the reaction is ran at 775 ºC. The total flow rate was 15 mL/min (Ar: 6.0 mL/min, CH4: 6.0 mL/min, O2: 3.0 mL/min), leading to a contact time of 0.5 s.

@@ -391,7 +391,7 @@ class AnthropicLLM(LLM):
                 [gen[0].message.usage_metadata['total_tokens'] for gen in gens.generations]
             )
             if inv_pred:
-                results.append(self.parse_inv_response(gens))
+                results.append(self.parse_inv_response(gens.generations))
             else:
                 results.append(self.parse_response(gens.generations))
             # results.append(gens[0].message.content)
@@ -415,7 +415,7 @@ class AnthropicLLM(LLM):
         return make_dd(np.array(values), probs)
     
     def parse_inv_response(self, generations):
-        return generations[0].text
+        return generations[0][0].text
 
 
 # Code below is deprecated and will be removed in future versions
@@ -492,16 +492,3 @@ def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
     for gen, q in zip(completion_response.generations, query_list):
         results.append(parse_response(gen[0], q, llm))
     return results, token_usage
-
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-    load_dotenv("./paper/.env")
-
-    llm = AnthropicLLM(n=5)
-    # p = llm.predict(["Hello, Claude", "How are you?"])
-    p = llm.predict(
-                    ["Hello, Claude. What is 2 + 2?", "Hello, Claude. What is 2 + 3?"], 
-                    system_message="You are a rebot who can do math. Anwer only the number referent to the answer of the mathematical operation. Nothing else."
-                    )
-
-    print(p)
