@@ -316,21 +316,78 @@ class ChatOpenAILLM(LLM):
     
     def parse_inv_response(self, generations):
         return generations[0].text
-   
 
-class AnyScaleLLM(ChatOpenAILLM):
-    # TODO: Implement support to llama models.
+
+class OpenRouterLLM(LLM):
     def create_llm(self):
-        if "logprobs" in self.kwargs:
-            del self.kwargs["logprobs"] # not supported
-
-        return ChatAnyscale(
-            model_name=self.model_name,
-            temperature=self.temperature,
-            n=self.n,
-            max_tokens=self.max_tokens,
-            model_kwargs=self.kwargs,
+        from openai import OpenAI
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
         )
+        return client
+        
+    def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
+        if type(query_list) == str:
+            query_list = [query_list]
+            
+        if "system_message" in kwargs:
+            system_message = kwargs["system_message"]
+            del kwargs["system_message"]
+        else:
+            system_message = ""
+            
+        results = []
+        token_usage = 0
+        
+        for query in query_list:
+            generations = []
+            messages = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": query}
+            ]
+            for _ in range(self.n):      
+                # Some models doen'ts support n. So iterating manually
+                completions = self.llm.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                )
+                generations.append(completions.choices[0].message.content)
+                token_usage += completions.usage.total_tokens
+
+            if verbose:
+                print("-" * 80)
+                print(query)
+                print("-" * 80)
+                print(query, generations)
+                print("-" * 80)
+                
+            if inv_pred:
+                results.append(self.parse_inv_response(generations))
+            else:
+                results.append(self.parse_response(generations))
+                
+        return results, token_usage
+    
+    def parse_response(self, generations):
+        values, logprobs = [], []
+        for gen in generations:
+            try:
+                v = float(truncate(gen))
+                values.append(v)
+            except ValueError:
+                continue
+            logprobs.append(np.log(1.0))
+        
+        probs = np.exp(np.array(logprobs))
+        probs = probs / np.sum(probs)
+
+        return make_dd(np.array(values), probs)
+    
+    def parse_inv_response(self, generations):
+        return generations[0]
 
 
 class AnthropicLLM(LLM):
@@ -418,90 +475,14 @@ class AnthropicLLM(LLM):
         return generations[0].text
 
 
-# Code below is deprecated and will be removed in future versions
-
-def wrap_chatllm(query_list, llm, system_message=""):
-    if type(query_list) == str:
-        query_list = [query_list]
-    if type(llm) == ChatOpenAI:
-        system_message_prompt = SystemMessage(
-            content=system_message
-        )
-        query_list = [
-            [system_message_prompt, HumanMessage(content=q)] for q in query_list
-        ]
-    return query_list
-
-
-def parse_response(generation, prompt, llm):
-    # first parse the options into numbers
-    text = generation.text
-    matches = re.findall(r"([A-Z])\. .*?([\+\-\d][\d\.e]*)", text)
-    values = dict()
-    k = None
-    for m in matches:
-        try:
-            k, v = m[0], float(m[1])
-            values[k] = v
-        except ValueError:
-            pass
-        k = None
-    # now get log prob of tokens after Answer:
-    tokens = generation.generation_info["logprobs"]["top_logprobs"]
-    offsets = generation.generation_info["logprobs"]["text_offset"]
-    if "Answer:" not in text:
-        # try to extend
-        c_generation = llm.generate([prompt + text + "\nAnswer:"]).generations[0][0]
-
-        logprobs = c_generation.generation_info["logprobs"]["top_logprobs"][0]
-    else:
-        # find token probs for answer
-        # feel like this is supper brittle, but not sure what else to try
-        at_answer = False
-        for i in range(len(offsets)):
-            start = offsets[i] - offsets[0]
-            end = offsets[i + 1] - offsets[0] if i < len(offsets) - 1 else -1
-            selected_token = text[start:end]
-            if "Answer" in selected_token:
-                at_answer = True
-            if at_answer and selected_token.strip() in values:
-                break
-        logprobs = tokens[i]
-    result = [
-        (values[k.strip()], v) for k, v in logprobs.items() if k.strip() in values
-    ]
-    probs = np.exp(np.array([v for k, v in result]))
-    probs = probs / np.sum(probs)
-    # return DiscreteDist(np.array([k for k, v in result]), probs)
-    return make_dd(np.array([k for k, v in result]), probs)
-
-
-def openai_choice_predict(query_list, llm, verbose, *args, **kwargs):
-    """Predict the output numbers for a given list of queries"""
-    with get_openai_callback() as cb:
-        query_list = wrap_chatllm(query_list, llm)
-        completion_response = llm.generate(query_list, *args, **kwargs)
-        token_usage = cb.total_tokens
-    if verbose:
-        print("-" * 80)
-        print(query_list[0])
-        print("-" * 80)
-        print(query_list[0], completion_response.generations[0][0].text)
-        print("-" * 80)
-    results = []
-    for gen, q in zip(completion_response.generations, query_list):
-        results.append(parse_response(gen[0], q, llm))
-    return results, token_usage
-
 if __name__ == "__main__":
     from dotenv import load_dotenv
-    load_dotenv("./paper/.env")
+    load_dotenv(".env")
 
-    llm = AnthropicLLM(n=5)
-    # p = llm.predict(["Hello, Claude", "How are you?"])
+    llm = OpenRouterLLM(n=5)
     p = llm.predict(
-                    ["Hello, Claude. What is 2 + 2?", "Hello, Claude. What is 2 + 3?"], 
-                    system_message="You are a rebot who can do math. Anwer only the number referent to the answer of the mathematical operation. Nothing else."
+                    ["Hello. What is 2 + 2?", "Hello. What is 2 + 3?"], 
+                    system_message="You are a robot who can do math. Anwer only the number referent to the answer of the mathematical operation. Nothing else."
                     )
 
     print(p)
