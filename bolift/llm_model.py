@@ -126,10 +126,11 @@ def get_llm(
         return OpenAILLM(**kwargs)
     elif model_name in chatopenai_models:
         return ChatOpenAILLM(**kwargs)
-    elif model_name in anyscale_models:
-        return AnyScaleLLM(**kwargs)
     elif model_name in anthropic_models:
         return AnthropicLLM(**kwargs)
+    elif model_name.startswith("openrouter"):
+        kwargs["model_name"] = kwargs["model_name"].replace("openrouter/", "")
+        return OpenRouterLLM(**kwargs)
     else:
         warnings.warn(f"Model {model_name} not explicitly supported. Please choose from {openai_models + chatopenai_models + anyscale_models + anthropic_models}\n\nWe will try to use this model as a ChatOpenAI model.")
         return ChatOpenAILLM(**kwargs)
@@ -479,7 +480,7 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv(".env")
 
-    llm = OpenRouterLLM(n=5)
+    llm = get_llm(model_name="openrouter/mistralai/mistral-7b-instruct:free")
     p = llm.predict(
                     ["Hello. What is 2 + 2?", "Hello. What is 2 + 3?"], 
                     system_message="You are a robot who can do math. Anwer only the number referent to the answer of the mathematical operation. Nothing else."
