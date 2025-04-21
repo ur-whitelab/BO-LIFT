@@ -348,7 +348,7 @@ class OpenRouterLLM(LLM):
                 {"role": "user", "content": query}
             ]
             for _ in range(self.n):      
-                # Some models doen'ts support n. So iterating manually
+                # Some models doesn't support n. So iterating manually
                 completions = self.llm.chat.completions.create(
                     model=self.model_name,
                     messages=messages,
