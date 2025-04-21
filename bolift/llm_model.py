@@ -483,7 +483,7 @@ if __name__ == "__main__":
     llm = get_llm(model_name="openrouter/mistralai/mistral-7b-instruct:free")
     p = llm.predict(
                     ["Hello. What is 2 + 2?", "Hello. What is 2 + 3?"], 
-                    system_message="You are a robot who can do math. Anwer only the number referent to the answer of the mathematical operation. Nothing else."
+                    system_message="You are a robot who can do math. Answer only the number referent to the answer of the mathematical operation. Nothing else."
                     )
 
     print(p)
