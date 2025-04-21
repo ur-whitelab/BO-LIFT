@@ -1,6 +1,6 @@
 from .version import __version__
 from .asktell import AskTellFewShotMulti, AskTellFewShotTopk
-from .asktellfinetuning import AskTellFinetuning
+from .asktellFinetuning import AskTellFinetuning
 
 try:
     from .asktellGPR import AskTellGPR
