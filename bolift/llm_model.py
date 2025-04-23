@@ -52,7 +52,7 @@ class DiscreteDist:
         return self.values[np.argmax(self.probs)]
 
     def std(self):
-        return np.sqrt(np.sum((self.values - self.mean()) ** 2 * self.probs))
+        return np.sqrt(np.sum((self.values - self.mean()) ** 2 * self.probs)) # should be dividing by the bessel correction and sum of the weights too 
 
     def __repr__(self):
         return f"DiscreteDist({self.values}, {self.probs})"

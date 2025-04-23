@@ -294,7 +294,7 @@ class AskTellFewShot:
         possible_x: Union[Pool, List[str]],
         aq_fxn: str = "upper_confidence_bound",
         k: int = 1,
-        inv_filter: int = 16,
+        inv_filter: int = 40,
         aug_random_filter: int = 0,
         lambda_mult: float = 0.5,
         _lambda: float = 0.5,
@@ -446,7 +446,7 @@ class AskTellFewShotTopk(AskTellFewShot):
             sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
             example_selector = sim_selector.from_examples(
                 [example],
-                OpenAIEmbeddings(),
+                OpenAIEmbeddings(),#model="text-embedding-3-large"
                 FAISS,
                 k=self._selector_k,
             )
