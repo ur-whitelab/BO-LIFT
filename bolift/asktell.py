@@ -1,5 +1,5 @@
-from typing import Dict, List, Any, Type, Union
-from pydantic import BaseModel, Field
+from typing import Dict, List, Any, Union
+from pydantic import Field
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 import numpy as np
@@ -9,8 +9,6 @@ from .llm_model import (
     get_llm,
     DiscreteDist,
     GaussDist,
-    openai_choice_predict,
-    wrap_chatllm
 )
 from .aqfxns import (
     probability_of_improvement,
@@ -30,11 +28,6 @@ from langchain.prompts.example_selector import (
 )
 
 import warnings
-
-_answer_choices = ["A", "B", "C", "D", "E"]
-
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
 
 
 class QuantileTransformer:
@@ -96,7 +89,6 @@ class AskTellFewShot:
         suffix: Optional[str]               = None,
         prefix: Optional[str]               = None,
         model: str                          = "gpt-3.5-turbo",
-        inv_model: str                      = None,
         temperature: Optional[float]        = None,
         x_formatter: Callable[[str], str]   = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
@@ -139,12 +131,10 @@ class AskTellFewShot:
         self._prompt_template = prompt_template
         self._prefix = prefix
         self._suffix = suffix
-        self._inv_model = inv_model if inv_model is not None else model
         self._model = model
         self._example_count = 0
         self._temperature = temperature
         self._k = k
-        self._answer_choices = _answer_choices[:k]
         self.use_quantiles = use_quantiles
         self.n_quantiles = n_quantiles
         self._calibration_factor = None
@@ -156,7 +146,7 @@ class AskTellFewShot:
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         raise NotImplementedError
     
-    def _setup_inv_llm(self, inv_model: str, temperature: Optional[float] = None):
+    def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
         raise NotImplementedError
     
     def _setup_prompt(
@@ -205,7 +195,7 @@ class AskTellFewShot:
             query,
             system_message=system_message
             )
-        print(x[0]) #remove later
+
         return x[0]
 
     def predict(self, x: str, system_message: Optional[str] = "") -> Union[Tuple[float, float], List[Tuple[float, float]]]:
@@ -277,7 +267,7 @@ class AskTellFewShot:
             )
             self.inv_prompt = self._setup_inverse_prompt(inv_example)
             self.llm = self._setup_llm(self._model, self._temperature)
-            self.inv_llm = self._setup_inv_llm(self._inv_model, self._temperature)
+            self.inv_llm = self._setup_inv_llm(self._model, self._temperature)
             self._ready = True
         else:
             # in else, so we don't add twice
@@ -294,7 +284,7 @@ class AskTellFewShot:
         possible_x: Union[Pool, List[str]],
         aq_fxn: str = "upper_confidence_bound",
         k: int = 1,
-        inv_filter: int = 40,
+        inv_filter: int = 16,
         aug_random_filter: int = 0,
         lambda_mult: float = 0.5,
         _lambda: float = 0.5,
@@ -311,7 +301,6 @@ class AskTellFewShot:
             aug_random_filter: Add this man y random examples to the pool to increase diversity after reducing pool with inverse model
             _lambda: Lambda value to use for UCB
             lambda_mult: control MMR diversity ,0-1 lower = more diverse
-
         Return:
             The selected x values, their acquisition function values, and the predicted y modes.
             Sorted by acquisition function value (descending)
@@ -326,7 +315,6 @@ class AskTellFewShot:
                 init_pnt,
                 [0] * k,
                 [0] * k,
-                [0] * k
             )
 
         if aq_fxn == "probability_of_improvement":
@@ -344,7 +332,6 @@ class AskTellFewShot:
                 possible_x.sample(k),
                 [0] * k,
                 [0] * k,
-                [0] * k,
             )
         else:
             raise ValueError(f"Unknown acquisition function: {aq_fxn}")
@@ -357,7 +344,7 @@ class AskTellFewShot:
         if inv_filter+aug_random_filter < len(possible_x):
             possible_x_l = []
             if inv_filter:
-                approx_x = self.inv_predict(best + np.abs(best)*np.random.normal(0.2, 0.05), system_message=inv_system_message)
+                approx_x = self.inv_predict(best * np.random.normal(1.2, 0.05), system_message=inv_system_message)
                 possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter, lambda_mult=lambda_mult))
 
             if aug_random_filter:
@@ -372,7 +359,6 @@ class AskTellFewShot:
                 possible_x.sample(k),
                 [0] * k,
                 [0] * k,
-                [0] * k,
             )
         return results
 
@@ -385,20 +371,20 @@ class AskTellFewShotTopk(AskTellFewShot):
             best_of=self._k,
             temperature=0.1 if temperature is None else temperature,
             model_name=model,
-            top_p=1.0,
-            stop=["\n", "###", "#", "##"],
-            logit_bias={
-                "198": -100,  # new line,
-                "628": -100,  # double new line,
-                "50256": -100,  # endoftext
-            },
+            top_p=0.5,
+            # stop=["\n", "###", "#", "##"],
+            # logit_bias={
+            #     "198": -100,  # new line,
+            #     "628": -100,  # double new line,
+            #     "50256": -100,  # endoftext
+            # },
             max_tokens=256,
             use_logprobs=self.use_logprobs,
         )
 
-    def _setup_inv_llm(self, inv_model: str, temperature: Optional[float] = None):
+    def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
         return get_llm(
-            model_name=inv_model,
+            model_name=model,
             # stop=[
             #     self.prompt.suffix.split()[0],
             #     self.inv_prompt.suffix.split()[0],
@@ -446,7 +432,7 @@ class AskTellFewShotTopk(AskTellFewShot):
             sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
             example_selector = sim_selector.from_examples(
                 [example],
-                OpenAIEmbeddings(),#model="text-embedding-3-large"
+                OpenAIEmbeddings(),
                 FAISS,
                 k=self._selector_k,
             )
@@ -462,7 +448,7 @@ class AskTellFewShotTopk(AskTellFewShot):
     def _setup_inverse_prompt(self, example: Dict):
         prompt_template = PromptTemplate(
             input_variables=["x", "y", "y_name", "x_name"],
-            template="If {y_name} is {y}, then the {x_name} is @@@\n{x}###",
+            template="If {y_name} is {y}, then {x_name} is @@@\n{x}###",
         )
         if example is not None:
             prompt_template.format(**example)
@@ -474,7 +460,7 @@ class AskTellFewShotTopk(AskTellFewShot):
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
             
-            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector # LabelSimilarityExampleSelector 
+            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector #LabelSimilarityExampleSelector 
             example_selector = sim_selector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
@@ -547,188 +533,10 @@ class AskTellFewShotTopk(AskTellFewShot):
         aq_vals = [aq_fxn(r, best) for r in results]
         selected = np.argsort(aq_vals)[::-1][:k]
         means = [r.mean() for r in results]
-        stds = [r.std() for r in results]
-       
-        return (
-            [possible_x[i] for i in selected],
-            [aq_vals[i] for i in selected],
-            [means[i] for i in selected],
-            [stds[i] for i in selected],
-        )
-
-
-# Code below is deprecated and will be removed in future versions
-
-class AskTellFewShotMulti(AskTellFewShot):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        warnings.warn("AskTellFewShotMulti is deprecated. Use AskTellFewShot instead. AskTellFewShotMulti was not updated to support Chat models")
- 
-    def _setup_llm(self, model: str, temperature: Optional[float] = None):
-        return get_llm(
-            model_name=model,
-            # stop=[self.prompt.suffix.split()[0], self.inv_prompt.suffix.split()[0]],
-            max_tokens=256,
-            logprobs=self._k,
-            temperature=0.05 if temperature is None else temperature,
-        )
-
-    def _setup_inv_llm(self, inv_model: str, temperature: Optional[float] = None):
-        return get_llm(
-            model_name=inv_model,
-            # stop=[
-            #     self.prompt.suffix.split()[0],
-            #     self.inv_prompt.suffix.split()[0],
-            #     "\n",
-            # ],
-            max_tokens=576,
-            temperature=0.05 if temperature is None else temperature,
-        )
-
-    def _setup_inverse_prompt(self, example: Dict):
-        prompt_template = PromptTemplate(
-            input_variables=["x", "y", "y_name", "x_name"],
-            template="If {y_name} is {y}, then {x_name} is @@@\n{x}###",
-        )
-        if example is not None:
-            prompt_template.format(**example)
-            examples = [example]
-        else:
-            examples = []
-        example_selector = None
-        if self._selector_k is not None:
-            if len(examples) == 0:
-                raise ValueError("Cannot do zero-shot with selector")
-            
-            sim_selector = LabelSimilarityExampleSelector #SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
-            example_selector = sim_selector.from_examples(
-                [example],
-                OpenAIEmbeddings(),
-                FAISS,
-                k=self._selector_k,
-            )
-        return FewShotPromptTemplate(
-            examples=examples if example_selector is None else None,
-            example_prompt=prompt_template,
-            example_selector=example_selector,
-            suffix="If {y_name} is {y}, then {x_name} is @@@",
-            input_variables=["y", "y_name", "x_name"],
-        )
-
-    def _setup_prompt(
-        self,
-        example: Dict,
-        prompt_template: Optional[PromptTemplate] = None,
-        suffix: Optional[str] = None,
-        prefix: Optional[str] = None,
-    ) -> FewShotPromptTemplate:
-        if prefix is None:
-            prefix = f"For each multiple choice question, select correct choice from {','.join(self._answer_choices)}\n"
-        if prompt_template is None:
-            prompt_template = PromptTemplate(
-                input_variables=["x", "Answer", "y_name"] + self._answer_choices,
-                template="Q: Given {x}. What is {y_name}?\n"
-                + "\n".join([f"{a}. {{{a}}}" for a in self._answer_choices])
-                + "\nAnswer: {Answer}\n\n",
-            )
-            if suffix is not None:
-                raise ValueError(
-                    "Cannot provide suffix if using default prompt template."
-                )
-            suffix = "Q: Given {x}, what is {y_name}?\nA."
-        elif suffix is None:
-            raise ValueError("Must provide suffix if using custom prompt template.")
-        # test out prompt
-        if example is not None:
-            prompt_template.format(**example)
-            examples = [example]
-        # TODO: make fake example text
-        else:
-            examples = []
-        example_selector = None
-        if self._selector_k is not None:
-            if len(examples) == 0:
-                raise ValueError("Cannot do zero-shot with selector")
-            
-            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
-            example_selector = sim_selector.from_examples(
-                [example],
-                OpenAIEmbeddings(),
-                FAISS,
-                k=self._selector_k,
-            )
-        return FewShotPromptTemplate(
-            examples=examples if example_selector is None else None,
-            example_prompt=prompt_template,
-            example_selector=example_selector,
-            suffix=suffix,
-            prefix=prefix,
-            input_variables=["x", "y_name"],
-        )
-
-    def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
-        # implementation of tell
-        if alt_ys is not None:
-            if len(alt_ys) != len(self._answer_choices) - 1:
-                raise ValueError("Must provide 4 alternative ys.")
-            alt_ys = [self.format_y(alt_y) for alt_y in alt_ys]
-        else:
-            alt_ys = []
-            alt_y = y
-            for i in range(100):
-                if len(alt_ys) == len(self._answer_choices) - 1:
-                    break
-                if i < 50:
-                    alt_y = y * 10 ** np.random.normal(0, 0.2)
-                else:  # try something different
-                    alt_y = y + np.random.uniform(-10, 10)
-                if self.format_y(alt_y) not in alt_ys and self.format_y(
-                    alt_y
-                ) != self.format_y(y):
-                    alt_ys.append(self.format_y(alt_y))
-        # choose answer
-        answer = np.random.choice(self._answer_choices)
-        example_dict = dict(
-            x=self.format_x(x),
-            Answer=answer,
-            y_name=self._y_name,
-        )
-        for a in self._answer_choices:
-            if a == answer:
-                example_dict[a] = self.format_y(y)
-            else:
-                example_dict[a] = alt_ys.pop()
-        self._ys.append(y)
-        inv_example = dict(
-            x=self.format_x(x),
-            y_name=self._y_name,
-            y=self.format_y(y),
-            x_name=self._x_name,
-        )
-        return example_dict, inv_example
-
-    def _predict(self, queries: List[str], system_message: str = "") -> List[DiscreteDist]:
-        return openai_choice_predict(queries, self.llm.llm, self._verbose)
-
-    def _inv_predict(self, queries: List[str], system_message: str = "") -> List[DiscreteDist]:
-        x, tokens = self.inv_llm.predict(queries, inv_pred=True, system_message=system_message)
-
-        return x, tokens
-
-    def _ask(
-        self, possible_x: List[str], best: float, aq_fxn: Callable, k: int, system_message: str
-    ) -> Tuple[List[str], List[float], List[float]]:
-        results = self.predict(possible_x, system_message=system_message)
-        # drop empties
-        if type(results) != type([]):
-            results = [results]
-        results = [r for r in results if len(r) > 0]
-        aq_vals = [aq_fxn(r, best) for r in results]
-        selected = np.argsort(aq_vals)[::-1][:k]
-        means = [r.mean() for r in results]
        
         return (
             [possible_x[i] for i in selected],
             [aq_vals[i] for i in selected],
             [means[i] for i in selected],
         )
+

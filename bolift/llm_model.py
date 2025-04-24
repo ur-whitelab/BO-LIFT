@@ -361,8 +361,11 @@ class OpenRouterLLM(LLM):
                     temperature=self.temperature,
                     max_tokens=self.max_tokens,
                 )
-                generations.append(completions.choices[0].message.content)
-                token_usage += completions.usage.total_tokens
+                if completions.choices:
+                    generations.append(completions.choices[0].message.content)
+                    token_usage += completions.usage.total_tokens
+                else:
+                    generations.append("")
 
             if verbose:
                 print("-" * 80)
