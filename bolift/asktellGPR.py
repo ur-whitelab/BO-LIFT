@@ -24,7 +24,7 @@ from openai import OpenAI
 
 
 class AskTellGPR(AskTellFewShot):
-    def __init__(self, n_components=2, pool=None, cache_path=None, n_neighbors=5, **kwargs):
+    def __init__(self, n_components=32, pool=None, cache_path=None, n_neighbors=5, **kwargs):
         super().__init__(**kwargs)
         self._selector_k = None # Forcing exemple_selector to not build context
         self._set_regressor()

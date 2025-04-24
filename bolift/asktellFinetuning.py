@@ -66,8 +66,8 @@ class AskTellFinetuning():
                 messages = {
                 "messages": [
                         {"role": "system", "content": ""},
-                        {"role": "user", "content": p},
-                        {"role": "assistant", "content": c}
+                        {"role": "user", "content": self.x_formatter(p)},
+                        {"role": "assistant", "content": self.y_formatter(c)}
                     ]
                 }
                 json_string = json.dumps(messages)
@@ -110,6 +110,7 @@ class AskTellFinetuning():
 
         s = self.client.fine_tuning.jobs.retrieve(response.id).status
         t = 0
+        print("\n")
         while s != "succeeded":
             if t % 3 == 0:
                 s += ".   "
@@ -177,7 +178,9 @@ class AskTellFinetuning():
             system_message=system_message
         )
         self.tokens_used += tokens
-        return results, tokens
+        if len(x) == 1:
+            return results[0]
+        return results
 
     def _setup_prompt(self, 
                       example: Dict, 
