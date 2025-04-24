@@ -52,7 +52,6 @@ class TestChatOpenAILLM(TestLLM):
             model_name=model_name,
             top_p=0.99,
             stop=["\n"],
-            logprobs=1,
         )
 
         query = [

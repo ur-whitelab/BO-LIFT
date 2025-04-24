@@ -1,12 +1,12 @@
 import bolift
-from bolift import (AskTellFewShotMulti,
-                    AskTellFewShotTopk,
-                    AskTellGPR,
-                    AskTellNearestNeighbor,
-                    AskTellRidgeKernelRegression,
-                    AskTellFinetuning,
-                    Pool)
-from bolift.llm_model import openai_choice_predict
+from bolift import (
+    AskTellFewShotTopk,
+    AskTellGPR,
+    AskTellNearestNeighbor,
+    AskTellRidgeKernelRegression,
+    AskTellFinetuning,
+    Pool
+    )
 import numpy as np
 from abc import ABC
 import pytest
@@ -97,40 +97,6 @@ class TestAskTell(ABC):
         assert asktell.tokens_used > 0
 
 
-class TestAskTellMulti(TestAskTell):
-    __test__ = False # turbo-instruct is consistently failing the test 
-
-    @classmethod
-    def asktells_to_test(cls):
-        return [AskTellFewShotMulti]
-    
-    @classmethod
-    def models_to_test(cls):
-        return ["gpt-3.5-turbo-instruct"]
-
-    def test_parse_response():
-        prompt = """
-Problem 1: What is 4 x 5?
-A. 12
-B. 32
-C. 20
-D. 16
-E. 24
-
-Answer: C
-
-Problem 2: What is 4 x 4?
-"""
-        asktell = bolift.AskTellFewShotMulti(
-            x_formatter=lambda x: f"y = 2 * {x}",
-            y_formatter=lambda y: str(int(y)),
-        )
-        llm = asktell.llm
-        result, token = openai_choice_predict([prompt], llm)
-        # assert 16 in result.values.astype(int)
-        assert any([r.mean == pytest.approx(16,0.1) for r in result.values.astype(int)])
-
-
 class TestAskTellTopK(TestAskTell):
     __test__ = True
 
@@ -209,7 +175,7 @@ class TestAskTellGPR():
         )
         for i in range(5):
             asktell.tell(i, 2 + i, train=False)
-        asktell.tell(5, 7, train=True)
+        asktell.tell(6, 8, train=True)
         assert len(asktell.examples) == 6
         assert asktell._example_count == 6
         
