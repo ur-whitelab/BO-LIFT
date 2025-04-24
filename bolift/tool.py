@@ -5,7 +5,7 @@ from typing import *
 import os
 import pandas as pd
 
-from pydantic import BaseModel
+# from pydantic import BaseModel
 
 class BOLiftTool(BaseTool):
     name: str = "Experiment Designer"
@@ -15,6 +15,8 @@ class BOLiftTool(BaseTool):
         "Ask. Returns optimal experiment to run next. Must call Tell first. "
         "Best. Returns predicted experiment. Must call Tell first."
     )
+    asktell: AskTellFewShotTopk | None = None
+    pool: Pool | None = None
 
     def __init__(self, pool: Pool, asktell: Optional[AskTellFewShotTopk] = None, ):
         # call the parent class constructor
