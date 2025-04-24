@@ -1,5 +1,5 @@
-from typing import Dict, List, Any, Type, Union
-from pydantic import BaseModel, Field
+from typing import Dict, List, Any, Union
+from pydantic import Field
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 import numpy as np
@@ -9,8 +9,6 @@ from .llm_model import (
     get_llm,
     DiscreteDist,
     GaussDist,
-    openai_choice_predict,
-    wrap_chatllm
 )
 from .aqfxns import (
     probability_of_improvement,
@@ -30,11 +28,6 @@ from langchain.prompts.example_selector import (
 )
 
 import warnings
-
-_answer_choices = ["A", "B", "C", "D", "E"]
-
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
 
 
 class QuantileTransformer:
@@ -142,7 +135,6 @@ class AskTellFewShot:
         self._example_count = 0
         self._temperature = temperature
         self._k = k
-        self._answer_choices = _answer_choices[:k]
         self.use_quantiles = use_quantiles
         self.n_quantiles = n_quantiles
         self._calibration_factor = None
@@ -548,178 +540,3 @@ class AskTellFewShotTopk(AskTellFewShot):
             [means[i] for i in selected],
         )
 
-
-# Code below is deprecated and will be removed in future versions
-
-class AskTellFewShotMulti(AskTellFewShot):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        warnings.warn("AskTellFewShotMulti is deprecated. Use AskTellFewShot instead. AskTellFewShotMulti was not updated to support Chat models")
- 
-    def _setup_llm(self, model: str, temperature: Optional[float] = None):
-        return get_llm(
-            model_name=model,
-            # stop=[self.prompt.suffix.split()[0], self.inv_prompt.suffix.split()[0]],
-            max_tokens=256,
-            logprobs=self._k,
-            temperature=0.05 if temperature is None else temperature,
-        )
-
-    def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
-        return get_llm(
-            model_name=model,
-            # stop=[
-            #     self.prompt.suffix.split()[0],
-            #     self.inv_prompt.suffix.split()[0],
-            #     "\n",
-            # ],
-            max_tokens=576,
-            temperature=0.05 if temperature is None else temperature,
-        )
-
-    def _setup_inverse_prompt(self, example: Dict):
-        prompt_template = PromptTemplate(
-            input_variables=["x", "y", "y_name", "x_name"],
-            template="If {y_name} is {y}, then {x_name} is @@@\n{x}###",
-        )
-        if example is not None:
-            prompt_template.format(**example)
-            examples = [example]
-        else:
-            examples = []
-        example_selector = None
-        if self._selector_k is not None:
-            if len(examples) == 0:
-                raise ValueError("Cannot do zero-shot with selector")
-            
-            sim_selector = LabelSimilarityExampleSelector #SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
-            example_selector = sim_selector.from_examples(
-                [example],
-                OpenAIEmbeddings(),
-                FAISS,
-                k=self._selector_k,
-            )
-        return FewShotPromptTemplate(
-            examples=examples if example_selector is None else None,
-            example_prompt=prompt_template,
-            example_selector=example_selector,
-            suffix="If {y_name} is {y}, then {x_name} is @@@",
-            input_variables=["y", "y_name", "x_name"],
-        )
-
-    def _setup_prompt(
-        self,
-        example: Dict,
-        prompt_template: Optional[PromptTemplate] = None,
-        suffix: Optional[str] = None,
-        prefix: Optional[str] = None,
-    ) -> FewShotPromptTemplate:
-        if prefix is None:
-            prefix = f"For each multiple choice question, select correct choice from {','.join(self._answer_choices)}\n"
-        if prompt_template is None:
-            prompt_template = PromptTemplate(
-                input_variables=["x", "Answer", "y_name"] + self._answer_choices,
-                template="Q: Given {x}. What is {y_name}?\n"
-                + "\n".join([f"{a}. {{{a}}}" for a in self._answer_choices])
-                + "\nAnswer: {Answer}\n\n",
-            )
-            if suffix is not None:
-                raise ValueError(
-                    "Cannot provide suffix if using default prompt template."
-                )
-            suffix = "Q: Given {x}, what is {y_name}?\nA."
-        elif suffix is None:
-            raise ValueError("Must provide suffix if using custom prompt template.")
-        # test out prompt
-        if example is not None:
-            prompt_template.format(**example)
-            examples = [example]
-        # TODO: make fake example text
-        else:
-            examples = []
-        example_selector = None
-        if self._selector_k is not None:
-            if len(examples) == 0:
-                raise ValueError("Cannot do zero-shot with selector")
-            
-            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
-            example_selector = sim_selector.from_examples(
-                [example],
-                OpenAIEmbeddings(),
-                FAISS,
-                k=self._selector_k,
-            )
-        return FewShotPromptTemplate(
-            examples=examples if example_selector is None else None,
-            example_prompt=prompt_template,
-            example_selector=example_selector,
-            suffix=suffix,
-            prefix=prefix,
-            input_variables=["x", "y_name"],
-        )
-
-    def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
-        # implementation of tell
-        if alt_ys is not None:
-            if len(alt_ys) != len(self._answer_choices) - 1:
-                raise ValueError("Must provide 4 alternative ys.")
-            alt_ys = [self.format_y(alt_y) for alt_y in alt_ys]
-        else:
-            alt_ys = []
-            alt_y = y
-            for i in range(100):
-                if len(alt_ys) == len(self._answer_choices) - 1:
-                    break
-                if i < 50:
-                    alt_y = y * 10 ** np.random.normal(0, 0.2)
-                else:  # try something different
-                    alt_y = y + np.random.uniform(-10, 10)
-                if self.format_y(alt_y) not in alt_ys and self.format_y(
-                    alt_y
-                ) != self.format_y(y):
-                    alt_ys.append(self.format_y(alt_y))
-        # choose answer
-        answer = np.random.choice(self._answer_choices)
-        example_dict = dict(
-            x=self.format_x(x),
-            Answer=answer,
-            y_name=self._y_name,
-        )
-        for a in self._answer_choices:
-            if a == answer:
-                example_dict[a] = self.format_y(y)
-            else:
-                example_dict[a] = alt_ys.pop()
-        self._ys.append(y)
-        inv_example = dict(
-            x=self.format_x(x),
-            y_name=self._y_name,
-            y=self.format_y(y),
-            x_name=self._x_name,
-        )
-        return example_dict, inv_example
-
-    def _predict(self, queries: List[str], system_message: str = "") -> List[DiscreteDist]:
-        return openai_choice_predict(queries, self.llm.llm, self._verbose)
-
-    def _inv_predict(self, queries: List[str], system_message: str = "") -> List[DiscreteDist]:
-        x, tokens = self.inv_llm.predict(queries, inv_pred=True, system_message=system_message)
-        return x, tokens
-
-    def _ask(
-        self, possible_x: List[str], best: float, aq_fxn: Callable, k: int, system_message: str
-    ) -> Tuple[List[str], List[float], List[float]]:
-        results = self.predict(possible_x, system_message=system_message)
-        # drop empties
-        if type(results) != type([]):
-            results = [results]
-        results = [r for r in results if len(r) > 0]
-        aq_vals = [aq_fxn(r, best) for r in results]
-        selected = np.argsort(aq_vals)[::-1][:k]
-        means = [r.mean() for r in results]
-       
-        return (
-            [possible_x[i] for i in selected],
-            [aq_vals[i] for i in selected],
-            [means[i] for i in selected],
-        )

@@ -4,7 +4,6 @@ from .pool import Pool
 from typing import *
 import os
 import pandas as pd
-
 from pydantic import BaseModel
 
 class BOLiftTool(BaseTool):

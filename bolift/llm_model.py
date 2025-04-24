@@ -53,7 +53,7 @@ class DiscreteDist:
         return self.values[np.argmax(self.probs)]
 
     def std(self):
-        return np.sqrt(np.sum((self.values - self.mean()) ** 2 * self.probs))
+        return np.sqrt(np.sum((self.values - self.mean()) ** 2 * self.probs)) # should be dividing by the bessel correction and sum of the weights too 
 
     def __repr__(self):
         return f"DiscreteDist({self.values}, {self.probs})"
@@ -93,6 +93,7 @@ def make_dd(values, probs):
     dd = DiscreteDist(values, probs)
     if len(dd) == 1:
         return GaussDist(dd.mean(), None)
+    
     return dd
 
 
@@ -186,7 +187,9 @@ class OpenAILLM(LLM):
             best_of=self.best_of,
             max_tokens=self.max_tokens,
             logit_bias=self.logit_bias,
-            model_kwargs=self.kwargs
+            logprobs= 5,
+            # top_logprobs= True,
+            #model_kwargs=self.kwargs
         )
     
     def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
@@ -202,6 +205,7 @@ class OpenAILLM(LLM):
             print("-" * 80)
             print(query_list[0])
             print("-" * 80)
+            print(completion_response)
             print(query_list[0], completion_response.generations[0][0].text)
             print("-" * 80)
 
@@ -211,6 +215,7 @@ class OpenAILLM(LLM):
                 results.append(self.parse_inv_response(gens))
             else:
                 results.append(self.parse_response(gens))
+        
         return results, token_usage
         
     def parse_response(self, generations):
@@ -231,9 +236,10 @@ class OpenAILLM(LLM):
                 logprobs.append(lp)
             else:
                 logprobs.append(np.log(1.0))
-
+        
+        eps=1e-15
         probs = np.exp(np.array(logprobs))
-        probs = probs / np.sum(probs)
+        probs = probs / np.sum(probs+eps)
 
         return make_dd(np.array(values), probs)
 
@@ -243,19 +249,16 @@ class OpenAILLM(LLM):
 
 class ChatOpenAILLM(LLM):
     def create_llm(self):
-        self.kwargs.update({
-            # "logprobs": True,
-            # "top_logprobs": 5
-        })
+        
         return ChatOpenAI(
             model_name=self.model_name,
             temperature=self.temperature,
             n=self.n,
             max_tokens=self.max_tokens,
-            logprobs=True,
-            top_logprobs=5,
-            model_kwargs=self.kwargs,
-        )
+            logprobs= True,
+            top_logprobs= 5)
+   
+
 
     def predict(self, query_list, inv_pred=False, verbose=False, *args, **kwargs):
         if type(query_list) == str:
@@ -309,9 +312,12 @@ class ChatOpenAILLM(LLM):
                 logprobs.append(lp)
             else:
                 logprobs.append(np.log(1.0))
+
+       
+        eps=1e-15
         
         probs = np.exp(np.array(logprobs))
-        probs = probs / np.sum(probs)
+        probs = probs / np.sum(probs+eps)
 
         return make_dd(np.array(values), probs)
     
@@ -355,8 +361,11 @@ class OpenRouterLLM(LLM):
                     temperature=self.temperature,
                     max_tokens=self.max_tokens,
                 )
-                generations.append(completions.choices[0].message.content)
-                token_usage += completions.usage.total_tokens
+                if completions.choices:
+                    generations.append(completions.choices[0].message.content)
+                    token_usage += completions.usage.total_tokens
+                else:
+                    generations.append("")
 
             if verbose:
                 print("-" * 80)

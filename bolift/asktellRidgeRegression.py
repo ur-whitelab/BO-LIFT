@@ -4,7 +4,7 @@ from .llm_model import GaussDist
 
 
 class AskTellRidgeKernelRegression(AskTellGPR):
-    def __init__(self, alpha=1, **kwargs):
+    def __init__(self, alpha=.5, **kwargs):
         super().__init__(**kwargs)
         self.alpha = alpha
 
