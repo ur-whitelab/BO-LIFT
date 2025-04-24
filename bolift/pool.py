@@ -27,7 +27,7 @@ class Pool:
         self.format = formatter
         self._db = FAISS.from_texts(
             [formatter(x) for x in pool],
-            OpenAIEmbeddings(), # model="text-embedding-3-large" 
+            OpenAIEmbeddings(), #model="text-embedding-3-large" 
             metadatas=[dict(data=p) for p in pool],
         )
 
@@ -73,4 +73,3 @@ class Pool:
 
     def __iter__(self):
         return iter(self._available)
-    
