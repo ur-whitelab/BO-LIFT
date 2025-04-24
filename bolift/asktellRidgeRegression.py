@@ -20,12 +20,12 @@ class AskTellRidgeKernelRegression(AskTellGPR):
     def _dot_product_kernel(self, X1, X2):
         return X1.dot(X2.T)
 
-    def _normalize(self, X, mean, std):
+    def _normalize(self, X, mean, std, eps=1e-6):
         if mean is None or std is None:
             raise ValueError(
                 "Mean and standard deviation must be set for normalization"
             )
-        return (X - mean) / std
+        return (X - mean) / (std+eps)
 
     def _train(self, X, y):
         self.train_x = np.array(self._query_cache(X), dtype=np.float64)

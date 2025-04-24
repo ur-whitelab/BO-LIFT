@@ -1,6 +1,6 @@
 from .version import __version__
-from .asktell import AskTellFewShotMulti, AskTellFewShotTopk
-from .asktellfinetuning import AskTellFinetuning
+from .asktell import AskTellFewShotTopk
+from .asktellFinetuning import AskTellFinetuning
 
 try:
     from .asktellGPR import AskTellGPR
@@ -10,3 +10,14 @@ except ImportError:
 from .asktellNearestNeighbor import AskTellNearestNeighbor
 from .pool import Pool
 from .tool import BOLiftTool
+
+
+__all__ = [
+    "AskTellFewShotTopk",
+    "AskTellFinetuning",
+    "AskTellGPR",
+    "AskTellRidgeKernelRegression",
+    "AskTellNearestNeighbor",
+    "Pool",
+    "BOLiftTool"
+    ]
