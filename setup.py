@@ -1,19 +1,19 @@
 from setuptools import setup
 
-exec(open("bolift/version.py").read())
+exec(open("boicl/version.py").read())
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="bolift",
+    name="boicl",
     version=__version__,
-    description="BayesOPT with LIFT",
+    description="BayesOPT with ICL",
     author="Andrew White",
     author_email="andrew.white@rochester.edu",
-    url="https://github.com/whitead/bolift",
+    url="https://github.com/whitead/boicl",
     license="MIT",
-    packages=["bolift"],
+    packages=["boicl"],
     install_requires=[
         "numpy",
         "langchain",
