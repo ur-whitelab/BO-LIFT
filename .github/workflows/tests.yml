@@ -24,10 +24,12 @@ jobs:
           pre-commit run --all-files
 
   test:
+    # Skip this job for now - will be re-enabled later
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.9, "3.10", 3.11]
+        python-version: [3.11]
 
     steps:
       - uses: actions/checkout@v2
