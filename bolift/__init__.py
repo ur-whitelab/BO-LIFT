@@ -19,5 +19,5 @@ __all__ = [
     "AskTellRidgeKernelRegression",
     "AskTellNearestNeighbor",
     "Pool",
-    "BOLiftTool"
-    ]
+    "BOLiftTool",
+]
