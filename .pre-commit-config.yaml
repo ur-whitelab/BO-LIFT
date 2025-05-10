@@ -1,19 +1,39 @@
+default_language_version:
+  python: python3
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.2.3
+    rev: v5.0.0
     hooks:
-      - id: trailing-whitespace
+      - id: check-added-large-files
+      - id: fix-byte-order-marker
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+      - id: check-symlinks
+      - id: check-toml
       - id: check-yaml
+      - id: debug-statements
+      - id: detect-private-key
       - id: end-of-file-fixer
       - id: mixed-line-ending
+      - id: trailing-whitespace
   - repo: https://github.com/psf/black
     rev: "22.3.0"
     hooks:
-    - id: black
-  - repo: https://github.com/tomcatling/black-nb
-    rev: "0.7"
+      - id: black
+  - repo: https://github.com/srstevenson/nb-clean
+    rev: 4.0.1
     hooks:
-      - id: black-nb
-        description: strip output and black source
-        additional_dependencies: ['black[jupyter]']
-        args: ["--clear-output"]
+      - id: nb-clean
+        args: [--preserve-cell-outputs, --remove-empty-cells]
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.4.2
+    hooks:
+      - id: prettier
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+        additional_dependencies: [".[toml]"]
+        exclude_types: [jupyter]
+        args: ["-L formate,Nd"]

@@ -110,7 +110,8 @@ class AskTellNearestNeighbor(AskTellFewShot):
             self.prompt.example_selector.k = min(self._example_count, self._selector_k)
 
         selected = [
-            self.prompt.example_selector.select_examples({"x": self.format_x(x_i)}) for x_i in x
+            self.prompt.example_selector.select_examples({"x": self.format_x(x_i)})
+            for x_i in x
         ]
 
         predictions = [[float(s["y"]) for s in selected_i] for selected_i in selected]

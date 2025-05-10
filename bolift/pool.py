@@ -4,6 +4,7 @@ import numpy as np
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
+
 class Pool:
     """Class for sampling from pool of possible data points
 
@@ -27,7 +28,7 @@ class Pool:
         self.format = formatter
         self._db = FAISS.from_texts(
             [formatter(x) for x in pool],
-            OpenAIEmbeddings(), #model="text-embedding-3-large" 
+            OpenAIEmbeddings(),  # model="text-embedding-3-large"
             metadatas=[dict(data=p) for p in pool],
         )
 
@@ -47,10 +48,12 @@ class Pool:
 
     def approx_sample(self, x: str, k: int, lambda_mult: float = 0.5) -> None:
         """Given an approximation of x, return k similar"""
-        
+
         # want to select extra, then remove previously chosen
         _k = k + len(self._selected)
-        docs = self._db.max_marginal_relevance_search(x, k=_k, fetch_k=5 * _k, lambda_mult=lambda_mult)
+        docs = self._db.max_marginal_relevance_search(
+            x, k=_k, fetch_k=5 * _k, lambda_mult=lambda_mult
+        )
         docs = [d.metadata["data"] for d in docs]
         # remove previously chosen
         docs = [d for d in docs if d not in self._selected]

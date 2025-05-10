@@ -54,30 +54,42 @@ class LabelSimilarityExampleSelector(SemanticSimilarityExampleSelector):
         # need to select examples with the most similar y from input_variables
         y = input_variables["y"]
         self.examples.sort(key=lambda ex: abs(float(y) - float(ex["y"])))
-        return self.examples[:self.k]
-    
-    
+        return self.examples[: self.k]
+
     def add_example(self, example: Dict[str, str]) -> str:
         self.examples.append(example)
 
     @classmethod
-    def from_examples(cls, 
-                      examples: List[Dict],
-                      embeddings: Embeddings,
-                      vectorstore_cls: type[VectorStore],
-                      k: int = 4,
-                      input_keys: Union[List[str], None] = None,
-                      *,
-                      example_keys: Union[List[str], None] = None,
-                      vectorstore_kwargs: Union[Dict, None] = None,
-                      **vectorstore_cls_kwargs: Any):
-        new_class = super().from_examples(examples, embeddings, vectorstore_cls, k, input_keys, example_keys=example_keys, vectorstore_kwargs=vectorstore_kwargs, **vectorstore_cls_kwargs)
+    def from_examples(
+        cls,
+        examples: List[Dict],
+        embeddings: Embeddings,
+        vectorstore_cls: type[VectorStore],
+        k: int = 4,
+        input_keys: Union[List[str], None] = None,
+        *,
+        example_keys: Union[List[str], None] = None,
+        vectorstore_kwargs: Union[Dict, None] = None,
+        **vectorstore_cls_kwargs: Any,
+    ):
+        new_class = super().from_examples(
+            examples,
+            embeddings,
+            vectorstore_cls,
+            k,
+            input_keys,
+            example_keys=example_keys,
+            vectorstore_kwargs=vectorstore_kwargs,
+            **vectorstore_cls_kwargs,
+        )
         new_class.examples = examples
         return new_class
-    
+
     def __str__(self) -> str:
-        return f"LabelSimilarityExampleSelector(examples={len(self.examples)}, k={self.k})"
-    
+        return (
+            f"LabelSimilarityExampleSelector(examples={len(self.examples)}, k={self.k})"
+        )
+
     def __repr__(self) -> str:
         return self.__str__()
 
@@ -85,22 +97,22 @@ class LabelSimilarityExampleSelector(SemanticSimilarityExampleSelector):
 class AskTellFewShot:
     def __init__(
         self,
-        prompt_template: PromptTemplate     = None,
-        suffix: Optional[str]               = None,
-        prefix: Optional[str]               = None,
-        model: str                          = "gpt-3.5-turbo",
-        temperature: Optional[float]        = None,
-        x_formatter: Callable[[str], str]   = lambda x: x,
+        prompt_template: PromptTemplate = None,
+        suffix: Optional[str] = None,
+        prefix: Optional[str] = None,
+        model: str = "gpt-3.5-turbo",
+        temperature: Optional[float] = None,
+        x_formatter: Callable[[str], str] = lambda x: x,
         y_formatter: Callable[[float], str] = lambda y: f"{y:0.2f}",
-        y_name: str                         = "output",
-        x_name: str                         = "input",
-        selector_k: Optional[int]           = None,
-        k: int                              = 5,
-        use_quantiles: bool                 = False,
-        n_quantiles: int                    = 100,
-        verbose: bool                       = False,
-        cos_sim: bool                       = True,
-        use_logprobs: bool                  = False,
+        y_name: str = "output",
+        x_name: str = "input",
+        selector_k: Optional[int] = None,
+        k: int = 5,
+        use_quantiles: bool = False,
+        n_quantiles: int = 100,
+        verbose: bool = False,
+        cos_sim: bool = True,
+        use_logprobs: bool = False,
     ) -> None:
         """Initialize Ask-Tell optimizer.
 
@@ -145,10 +157,10 @@ class AskTellFewShot:
 
     def _setup_llm(self, model: str, temperature: Optional[float] = None):
         raise NotImplementedError
-    
+
     def _setup_inv_llm(self, model: str, temperature: Optional[float] = None):
         raise NotImplementedError
-    
+
     def _setup_prompt(
         self,
         example: Dict,
@@ -157,16 +169,16 @@ class AskTellFewShot:
         prefix: Optional[str] = None,
     ) -> FewShotPromptTemplate:
         raise NotImplementedError
-    
+
     def _setup_inverse_prompt(self, example: Dict):
         raise NotImplementedError
 
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
         raise NotImplementedError
-    
+
     def _predict(self, queries: List[str]) -> List[DiscreteDist]:
         raise NotImplementedError
-    
+
     def _inv_predict(self, queries: List[str]) -> List[DiscreteDist]:
         raise NotImplementedError
 
@@ -174,7 +186,7 @@ class AskTellFewShot:
         self, possible_x: List[str], best: float, aq_fxn: Callable, k: int
     ) -> Tuple[List[str], List[float], List[float]]:
         raise NotImplementedError
-    
+
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
         raise NotImplementedError
 
@@ -191,14 +203,13 @@ class AskTellFewShot:
         query = self.inv_prompt.format(
             y=self.format_y(y), y_name=self._y_name, x_name=self._x_name
         )
-        x, tokens = self._inv_predict(
-            query,
-            system_message=system_message
-            )
+        x, tokens = self._inv_predict(query, system_message=system_message)
 
         return x[0]
 
-    def predict(self, x: str, system_message: Optional[str] = "") -> Union[Tuple[float, float], List[Tuple[float, float]]]:
+    def predict(
+        self, x: str, system_message: Optional[str] = ""
+    ) -> Union[Tuple[float, float], List[Tuple[float, float]]]:
         """Predict the probability distribution and values for a given x.
 
         Args:
@@ -215,7 +226,7 @@ class AskTellFewShot:
             )
             self.inv_prompt = self._setup_inverse_prompt(None)
             self.llm = self._setup_llm(self._model)
-            self._ready = True 
+            self._ready = True
 
         if self._selector_k is not None:
             self.prompt.example_selector.k = min(self._example_count, self._selector_k)
@@ -278,7 +289,7 @@ class AskTellFewShot:
                 self.prompt.examples.append(example_dict)
                 self.inv_prompt.examples.append(inv_example)
         self._example_count += 1
-    
+
     def ask(
         self,
         possible_x: Union[Pool, List[str]],
@@ -310,7 +321,7 @@ class AskTellFewShot:
 
         # if we have less than 2 examples, just return random
         if self._example_count < 2:
-            init_pnt=possible_x.sample(k)
+            init_pnt = possible_x.sample(k)
             return (
                 init_pnt,
                 [0] * k,
@@ -341,18 +352,27 @@ class AskTellFewShot:
         else:
             best = np.max(self._ys)
 
-        if inv_filter+aug_random_filter < len(possible_x):
+        if inv_filter + aug_random_filter < len(possible_x):
             possible_x_l = []
             if inv_filter:
-                approx_x = self.inv_predict(best * np.random.normal(1.2, 0.05), system_message=inv_system_message)
-                possible_x_l.extend(possible_x.approx_sample(approx_x, inv_filter, lambda_mult=lambda_mult))
+                approx_x = self.inv_predict(
+                    best * np.random.normal(1.2, 0.05),
+                    system_message=inv_system_message,
+                )
+                possible_x_l.extend(
+                    possible_x.approx_sample(
+                        approx_x, inv_filter, lambda_mult=lambda_mult
+                    )
+                )
 
             if aug_random_filter:
                 possible_x_l.extend(possible_x.sample(aug_random_filter))
         else:
             possible_x_l = list(possible_x)
-        
-        results = self._ask(possible_x_l, best, aq_fxn, k, system_message=system_message)
+
+        results = self._ask(
+            possible_x_l, best, aq_fxn, k, system_message=system_message
+        )
         if len(results[0]) == 0 and len(possible_x_l) != 0:
             # if we have nothing, just return random one
             return (
@@ -429,7 +449,11 @@ class AskTellFewShotTopk(AskTellFewShot):
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector
+            sim_selector = (
+                SemanticSimilarityExampleSelector
+                if self.cos_sim
+                else MaxMarginalRelevanceExampleSelector
+            )
             example_selector = sim_selector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
@@ -459,8 +483,12 @@ class AskTellFewShotTopk(AskTellFewShot):
         if self._selector_k is not None:
             if len(examples) == 0:
                 raise ValueError("Cannot do zero-shot with selector")
-            
-            sim_selector = SemanticSimilarityExampleSelector if self.cos_sim else MaxMarginalRelevanceExampleSelector #LabelSimilarityExampleSelector 
+
+            sim_selector = (
+                SemanticSimilarityExampleSelector
+                if self.cos_sim
+                else MaxMarginalRelevanceExampleSelector
+            )  # LabelSimilarityExampleSelector
             example_selector = sim_selector.from_examples(
                 [example],
                 OpenAIEmbeddings(),
@@ -477,24 +505,25 @@ class AskTellFewShotTopk(AskTellFewShot):
 
     def _predict(self, queries: List[str], system_message: str) -> List[DiscreteDist]:
         if not system_message:
-            warnings.warn("No system message provided for prediction. Using default. \nNot clearly specifying the task for the LLM usually decreases its performance considerably.")
+            warnings.warn(
+                "No system message provided for prediction. Using default. \nNot clearly specifying the task for the LLM usually decreases its performance considerably."
+            )
 
-        results, tokens = self.llm.predict(
-            queries,
-            system_message=system_message
-        )
+        results, tokens = self.llm.predict(queries, system_message=system_message)
         return results, tokens
 
-    def _inv_predict(self, queries: List[str], system_message: str) -> List[DiscreteDist]:
+    def _inv_predict(
+        self, queries: List[str], system_message: str
+    ) -> List[DiscreteDist]:
         if not system_message:
-            warnings.warn("No system message provided for inverse prediction. Using default. \nNot clearly specifying the task for the LLM usually decreases its performance considerably.")
+            warnings.warn(
+                "No system message provided for inverse prediction. Using default. \nNot clearly specifying the task for the LLM usually decreases its performance considerably."
+            )
 
         x, tokens = self.inv_llm.predict(
-            queries,
-            inv_pred=True,
-            system_message=system_message
-            )
-        
+            queries, inv_pred=True, system_message=system_message
+        )
+
         return x, tokens
 
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
@@ -523,7 +552,12 @@ class AskTellFewShotTopk(AskTellFewShot):
         return example_dict, inv_dict
 
     def _ask(
-        self, possible_x: List[str], best: float, aq_fxn: Callable, k: int, system_message: str
+        self,
+        possible_x: List[str],
+        best: float,
+        aq_fxn: Callable,
+        k: int,
+        system_message: str,
     ) -> Tuple[List[str], List[float], List[float]]:
         results = self.predict(possible_x, system_message=system_message)
         # drop empties
@@ -533,10 +567,9 @@ class AskTellFewShotTopk(AskTellFewShot):
         aq_vals = [aq_fxn(r, best) for r in results]
         selected = np.argsort(aq_vals)[::-1][:k]
         means = [r.mean() for r in results]
-       
+
         return (
             [possible_x[i] for i in selected],
             [aq_vals[i] for i in selected],
             [means[i] for i in selected],
         )
-
