@@ -169,7 +169,7 @@ class AskTellFewShot:
         prefix: Optional[str] = None,
     ) -> FewShotPromptTemplate:
         raise NotImplementedError
-    
+
     def _setup_inverse_prompt(self, example: Dict):
         raise NotImplementedError
 
@@ -186,6 +186,7 @@ class AskTellFewShot:
         self, possible_x: List[str], best: float, aq_fxn: Callable, k: int
     ) -> Tuple[List[str], List[float], List[float]]:
         raise NotImplementedError
+
     def _tell(self, x: str, y: float, alt_ys: Optional[List[float]] = None) -> Dict:
         raise NotImplementedError
 
@@ -225,7 +226,7 @@ class AskTellFewShot:
             )
             self.inv_prompt = self._setup_inverse_prompt(None)
             self.llm = self._setup_llm(self._model)
-            self._ready = True 
+            self._ready = True
 
         if self._selector_k is not None:
             self.prompt.example_selector.k = min(self._example_count, self._selector_k)
@@ -288,6 +289,7 @@ class AskTellFewShot:
                 self.prompt.examples.append(example_dict)
                 self.inv_prompt.examples.append(inv_example)
         self._example_count += 1
+
     def ask(
         self,
         possible_x: Union[Pool, List[str]],

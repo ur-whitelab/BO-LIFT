@@ -202,6 +202,7 @@ class TestAskTellFineTuning:
     @pytest.fixture
     def asktells_to_test():
         return AskTellFinetuning
+
     def test_prepare_data_finetuning(asktell_class):
         asktell = asktell_class(
             x_formatter=lambda x: f"y = 2 * {x}", model="text-ada-001", finetune=True

@@ -4,6 +4,7 @@ import numpy as np
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
+
 class Pool:
     """Class for sampling from pool of possible data points
 

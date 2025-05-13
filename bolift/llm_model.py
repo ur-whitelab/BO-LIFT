@@ -6,6 +6,7 @@ from langchain_openai import OpenAI, ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_community.chat_models import ChatAnyscale
 from langchain_community.callbacks import get_openai_callback
+
 # from langchain.cache import InMemoryCache
 import langchain
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from typing import Union
 import warnings
 
 # langchain.llm_cache = InMemoryCache()
+
 
 def truncate(s):
     """Truncate to first number"""
@@ -324,6 +326,7 @@ class ChatOpenAILLM(LLM):
             else:
                 results.append(self.parse_response(gens))
         return results, token_usage
+
     def parse_response(self, generations):
         values, logprobs = [], []
         for gen in generations:
@@ -354,6 +357,7 @@ class ChatOpenAILLM(LLM):
 class OpenRouterLLM(LLM):
     def create_llm(self):
         from openai import OpenAI
+
         client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -419,6 +423,7 @@ class OpenRouterLLM(LLM):
         probs = probs / np.sum(probs)
 
         return make_dd(np.array(values), probs)
+
     def parse_inv_response(self, generations):
         return generations[0]
 
@@ -503,12 +508,14 @@ class AnthropicLLM(LLM):
         probs = probs / np.sum(probs)
 
         return make_dd(np.array(values), probs)
+
     def parse_inv_response(self, generations):
         return generations[0].text
 
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv(".env")
 
     llm = get_llm(model_name="openrouter/mistralai/mistral-7b-instruct:free")
