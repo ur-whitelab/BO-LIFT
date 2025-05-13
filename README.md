@@ -1,17 +1,17 @@
-# 🤖 BO-LIFT: Bayesian Optimization using in-context learning
+# 🤖 BO-ICL: Bayesian Optimization using in-context learning
 
 ![version](https://img.shields.io/badge/version-0.0.1-brightgreen)
 [![paper](https://img.shields.io/badge/paper-arXiv-red)](https://arxiv.org/abs/2304.05341)
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
 
-BO-LIFT does regression with uncertainties using frozen Large Language Models by using token probabilities.
+BO-ICL does regression with uncertainties using frozen Large Language Models by using token probabilities.
 It uses LangChain to select examples to create in-context learning prompts from training data.
 By selecting examples, it can consider more training data than it fits in the model's context window.
 Being able to predict uncertainty, allow the employment of interesting techniques such as Bayesian Optimization.
 
 ## Table of content
 
-- [BO-LIFT](#-bo-lift-bayesian-optimization-using-in-context-learning)
+- [BO-ICL](#-bo-icl-bayesian-optimization-using-in-context-learning)
   - [Install](#install-)
   - [Usage](#usage-)
     - [Quickstart](#quickstart-)
@@ -21,22 +21,22 @@ Being able to predict uncertainty, allow the employment of interesting technique
 
 ## Install 📦
 
-bolift can simply be installed using pip:
+boicl can simply be installed using pip:
 
 ```bash
-pip install bolift
+pip install boicl
 ```
 
 Some additional requirements are needed to use the Gaussian Process Regressor (GPR) module.
 They can also be installed using pip:
 
 ```bash
-pip install bolift[gpr]
+pip install boicl[gpr]
 ```
 
 ## Usage 💻
 
-You need to set up your OpenAI API key in order to use BO-LIFT.
+You need to set up your OpenAI API key in order to use BO-ICL.
 You can do that using the `os` Python library:
 
 ```py
@@ -46,11 +46,11 @@ os.environ["OPENAI_API_KEY"] = "<your-key-here>"
 
 ### Quickstart 🔥
 
-`bolift` provides a simple interface to use the model.
+`boicl` provides a simple interface to use the model.
 
 ```py
 # Create the model object
-asktell = bolift.AskTellFewShotTopk()
+asktell = boicl.AskTellFewShotTopk()
 
 # Tell some points to the model
 asktell.tell("1-bromopropane", -1.730)
@@ -77,7 +77,7 @@ pool_list = [
 ]
 
 # Create the pool object
-pool=bolift.Pool(pool_list)
+pool=boicl.Pool(pool_list)
 
 # Ask the next point
 asktell.ask(pool)
@@ -103,12 +103,12 @@ Which is closer to the label of -2.370 for the 1-bromobutane and the uncertainty
 
 ### Customising the model
 
-`bolift` provides different models depending on the prompt you want to use.
+`boicl` provides different models depending on the prompt you want to use.
 One example of usage can be seen in the following:
 
 ```py
-import bolift
-asktell = bolift.AskTellFewShotTopk(
+import boicl
+asktell = boicl.AskTellFewShotTopk(
   x_formatter=lambda x: f"iupac name {x}",
   y_name="measured log solubility in mols per litre",
   y_formatter=lambda y: f"{y:.2f}",
@@ -128,11 +128,11 @@ Additionally, we implemented other models. A brief list can be seen below:
 - AskTellGPR;
 - AskTellNearestNeighbor.
 
-Refer to the [notebooks](https://github.com/ur-whitelab/BO-LIFT/tree/main/paper) available in the paper directory to see examples of how to use bolift and the [paper](https://arxiv.org/abs/2304.05341) for a detailed description of the classes.
+Refer to the [notebooks](https://github.com/ur-whitelab/BO-ICL/tree/main/paper) available in the paper directory to see examples of how to use boicl and the [paper](https://arxiv.org/abs/2304.05341) for a detailed description of the classes.
 
 ### Inverse design
 
-Aiming to propose new data, `bolift` implements another approach to generate data.
+Aiming to propose new data, `boicl` implements another approach to generate data.
 After following a similar procedure to `tell` datapoints to the model, the `inv_predict` can be used to do an inverse prediction.
 For carrying an inverse design out, we query the label we want and the model should generate a data that corresponds to that label:
 

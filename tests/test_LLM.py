@@ -1,5 +1,5 @@
-import bolift
-from bolift import llm_model
+import boicl
+from boicl import llm_model
 import numpy as np
 from abc import ABC
 import pytest
