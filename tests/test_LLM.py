@@ -24,7 +24,7 @@ class TestLLM(ABC):
 
     def test_completion(self, model_name):
         llm = llm_model.get_llm(model_name=model_name, stop=["\n\n"])
-        result, token = llm.predict("The value of 1 + 1 is")
+        result, token = llm.predict("How much is 1 + 1? Answer the only the number")
         assert result[0].mean() == pytest.approx(2, 0.1)
 
 
