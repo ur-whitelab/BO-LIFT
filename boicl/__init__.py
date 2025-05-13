@@ -6,10 +6,10 @@ try:
     from .asktellGPR import AskTellGPR
     from .asktellRidgeRegression import AskTellRidgeKernelRegression
 except ImportError:
-    print("GPR Packages not installed. Do `pip install bolift[gpr]` to install them")
+    print("GPR Packages not installed. Do `pip install boicl[gpr]` to install them")
 from .asktellNearestNeighbor import AskTellNearestNeighbor
 from .pool import Pool
-from .tool import BOLiftTool
+from .tool import BOICLTool
 
 
 __all__ = [
@@ -19,5 +19,5 @@ __all__ = [
     "AskTellRidgeKernelRegression",
     "AskTellNearestNeighbor",
     "Pool",
-    "BOLiftTool",
+    "BOICLTool",
 ]
