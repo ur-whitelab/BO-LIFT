@@ -45,7 +45,6 @@ class AskTellFinetuning:
         self.response = None
         self.llm = self._setup_llm(model=self.model)
         self.client = openai.OpenAI()
-        verbose = (verbose,)
         if id:
             self.response = self.client.fine_tuning.jobs.retrieve(id)
             self.model = self.response.fine_tuned_model
@@ -96,7 +95,6 @@ class AskTellFinetuning:
     def fine_tune(self, prompts, completions, out_path="./out", out_file=None) -> None:
         if not os.path.exists(f"{out_path}"):
             os.makedirs(f"{out_path}")
-
         self.prepare_data(
             prompts,
             completions,

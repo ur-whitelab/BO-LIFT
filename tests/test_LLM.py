@@ -42,7 +42,6 @@ class TestChatOpenAILLM(TestLLM):
     @classmethod
     def models_to_test(cls):
         return ["gpt-3.5-turbo-0125"]
-
     def test_parse_response(self, model_name):
         print(model_name)
         prompt = "2 + 2 is"

@@ -6,6 +6,7 @@ import os
 import pandas as pd
 from pydantic import BaseModel
 
+from pydantic import BaseModel
 
 class BOLiftTool(BaseTool):
     name: str = "Experiment Designer"

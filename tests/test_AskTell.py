@@ -48,7 +48,6 @@ class TestAskTell(ABC):
         dist = asktell.predict(2, system_message=sys_msg)
         m = dist.mode()
         assert m == pytest.approx(4, 0.001)
-
         dist = asktell.predict(3, system_message=sys_msg)
         m = dist.mode()
         assert m == pytest.approx(6, 0.001)
@@ -112,7 +111,6 @@ class TestAskTellKNN:
     # @classmethod
     # def asktells_to_test(cls):
     #     return [AskTellNearestNeighbor]
-
     # @classmethod
     # def models_to_test(cls):
     #     return ["gpt-3.5-turbo"]
@@ -130,7 +128,6 @@ class TestAskTellKNN:
         dist = asktell.predict(2)
         m = dist.mode()
         assert m == pytest.approx(3.333, 0.01)
-
         asktell.tell(5, 7)
         asktell.tell(6, 8)
         dist = asktell.predict(4)
@@ -163,7 +160,6 @@ class TestAskTellGPR:
     # @classmethod
     # def asktells_to_test(cls):
     #     return [AskTellGPR]
-
     # @pytest.mark.parametrize("asktell_class", [AskTellGPR])
     def test_gpr(self):
         asktell = AskTellGPR(
@@ -206,7 +202,6 @@ class TestAskTellFineTuning:
     @pytest.fixture
     def asktells_to_test():
         return AskTellFinetuning
-
     def test_prepare_data_finetuning(asktell_class):
         asktell = asktell_class(
             x_formatter=lambda x: f"y = 2 * {x}", model="text-ada-001", finetune=True

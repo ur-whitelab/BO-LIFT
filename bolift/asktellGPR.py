@@ -299,6 +299,7 @@ class AskTellGPR(AskTellFewShot):
     def tell(
         self, x: str, y: float, alt_ys: Optional[List[float]] = None, train=True
     ) -> None:
+        # Reimplement tell to avoid feeding new points to the prompt exemple_selector
         """Tell the optimizer about a new example."""
         example_dict, inv_example = self._tell(x, y, alt_ys)
 
