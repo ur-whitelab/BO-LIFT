@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="boicl",
     version=__version__,
-    description="BayesOPT with ICL",
+    description="BayesOPT with In-Context Learning",
     author="Andrew White",
     author_email="andrew.white@rochester.edu",
     url="https://github.com/whitead/boicl",
@@ -19,6 +19,7 @@ setup(
         "langchain",
         "langchain_community",
         "langchain_openai",
+        "langchain_anthropic",
         "openai",
         "faiss-cpu",
         "scipy",
