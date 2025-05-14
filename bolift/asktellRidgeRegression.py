@@ -4,7 +4,7 @@ from .llm_model import GaussDist
 
 
 class AskTellRidgeKernelRegression(AskTellGPR):
-    def __init__(self, alpha=1, **kwargs):
+    def __init__(self, alpha=0.5, **kwargs):
         super().__init__(**kwargs)
         self.alpha = alpha
 
@@ -25,7 +25,7 @@ class AskTellRidgeKernelRegression(AskTellGPR):
             raise ValueError(
                 "Mean and standard deviation must be set for normalization"
             )
-        return (X - mean) / (std+eps)
+        return (X - mean) / (std + eps)
 
     def _train(self, X, y):
         self.train_x = np.array(self._query_cache(X), dtype=np.float64)

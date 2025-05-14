@@ -4,8 +4,10 @@ from .pool import Pool
 from typing import *
 import os
 import pandas as pd
+from pydantic import BaseModel
 
 from pydantic import BaseModel
+
 
 class BOLiftTool(BaseTool):
     name: str = "Experiment Designer"
@@ -15,8 +17,14 @@ class BOLiftTool(BaseTool):
         "Ask. Returns optimal experiment to run next. Must call Tell first. "
         "Best. Returns predicted experiment. Must call Tell first."
     )
+    asktell: AskTellFewShotTopk | None = None
+    pool: Pool | None = None
 
-    def __init__(self, pool: Pool, asktell: Optional[AskTellFewShotTopk] = None, ):
+    def __init__(
+        self,
+        pool: Pool,
+        asktell: Optional[AskTellFewShotTopk] = None,
+    ):
         # call the parent class constructor
         super(BOLiftTool, self).__init__()
 
@@ -48,12 +56,12 @@ class BOLiftTool(BaseTool):
                 for i in range(len(data)):
                     self.asktell.tell(data.iloc[i, 0], data.iloc[i, 1])
             except:
-                return 'Error in input file. Make sure that the file has no header and only has 2 columns: x and y. Remove all non-numeric values from y.'
+                return "Error in input file. Make sure that the file has no header and only has 2 columns: x and y. Remove all non-numeric values from y."
             return f"Added {len(data)} training examples."
         elif cmd == "best":
             results = self.asktell.ask(self.pool, aq_fxn="greedy")
             return f"Best experiment is: {results[0][0]}"
+
     async def _arun(self, query: str) -> str:
         """Use the tool asynchronously."""
         raise NotImplementedError()
-

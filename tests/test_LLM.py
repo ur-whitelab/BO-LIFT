@@ -8,10 +8,12 @@ from langchain.schema import HumanMessage, SystemMessage
 
 np.random.seed(0)
 
+
 def pytest_generate_tests(metafunc):
-    if 'model_name' in metafunc.fixturenames:
+    if "model_name" in metafunc.fixturenames:
         models = metafunc.cls.models_to_test()
         metafunc.parametrize("model_name", models)
+
 
 class TestLLM(ABC):
     __test__ = False
@@ -22,7 +24,7 @@ class TestLLM(ABC):
 
     def test_completion(self, model_name):
         llm = llm_model.get_llm(model_name=model_name, stop=["\n\n"])
-        result, token = llm.predict("The value of 1 + 1 is")
+        result, token = llm.predict("How much is 1 + 1? Answer the only the number")
         assert result[0].mean() == pytest.approx(2, 0.1)
 
 
@@ -40,7 +42,7 @@ class TestChatOpenAILLM(TestLLM):
     @classmethod
     def models_to_test(cls):
         return ["gpt-3.5-turbo-0125"]
-    
+
     def test_parse_response(self, model_name):
         print(model_name)
         prompt = "2 + 2 is"
@@ -52,16 +54,11 @@ class TestChatOpenAILLM(TestLLM):
             model_name=model_name,
             top_p=0.99,
             stop=["\n"],
-            logprobs=1,
         )
 
-        query = [
-            SystemMessage(content=""),
-            HumanMessage(content=prompt)
-        ]
+        query = [SystemMessage(content=""), HumanMessage(content=prompt)]
 
         g = llm.llm.generate([query]).generations
         result = llm.parse_response(g[0])
 
         assert abs(result.mode().astype(int) - answer) <= 1
-

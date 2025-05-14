@@ -1,10 +1,8 @@
 # 🤖 BO-LIFT: Bayesian Optimization using in-context learning
 
-
 ![version](https://img.shields.io/badge/version-0.0.1-brightgreen)
 [![paper](https://img.shields.io/badge/paper-arXiv-red)](https://arxiv.org/abs/2304.05341)
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
-
 
 BO-LIFT does regression with uncertainties using frozen Large Language Models by using token probabilities.
 It uses LangChain to select examples to create in-context learning prompts from training data.
@@ -12,6 +10,7 @@ By selecting examples, it can consider more training data than it fits in the mo
 Being able to predict uncertainty, allow the employment of interesting techniques such as Bayesian Optimization.
 
 ## Table of content
+
 - [BO-LIFT](#-bo-lift-bayesian-optimization-using-in-context-learning)
   - [Install](#install-)
   - [Usage](#usage-)
@@ -48,6 +47,7 @@ os.environ["OPENAI_API_KEY"] = "<your-key-here>"
 ### Quickstart 🔥
 
 `bolift` provides a simple interface to use the model.
+
 ```py
 # Create the model object
 asktell = bolift.AskTellFewShotTopk()
@@ -62,9 +62,11 @@ asktell.tell("1-bromonaphthalene", -4.35)
 yhat = asktell.predict("1-bromobutane")
 print(yhat.mean(), yhat.std())
 ```
+
 This prediction returns $-2.92 \pm 1.27$.
 
 Further improvements can be done by using Bayesian Optimization.
+
 ```py
 # Create a list of examples
 pool_list = [
@@ -84,9 +86,11 @@ asktell.ask(pool)
 (['1-bromo-2-methylpropane'], [-1.284916344093158], [-1.92])
 
 ```
+
 Where the first value is the selected point, the second value is the value of the acquisition function, and the third value is the predicted mean.
 
 Let's tell this point to the model with its correct label and make a prediction:
+
 ```py
 asktell.tell("1-bromo-2-methylpropane", -2.430)
 
@@ -113,8 +117,10 @@ asktell = bolift.AskTellFewShotTopk(
   temperature=0.7,
 )
 ```
+
 Other arguments can be used to customize the prompt (`prefix`, `prompt_template`, `suffix`) and the in-context learning procedure (`use_quantiles`, `n_quantiles`).
 Additionally, we implemented other models. A brief list can be seen below:
+
 - AskTellFewShotMulti;
 - AskTellFewShotTopk;
 - AskTellFinetuning;
@@ -149,8 +155,10 @@ for i in range(n):
 
 asktell.inv_predict(20.0)
 ```
+
 The data for that is available in the paper directory.
 This generated the following procedure:
+
 ```
 the synthesis procedure:"A 30 wt% tungsten carbide catalyst was prepared with Cu dopant metal at 5 wt% and carburized at 835 C. The reaction was run at 350 ºC"
 ```
@@ -158,9 +166,10 @@ the synthesis procedure:"A 30 wt% tungsten carbide catalyst was prepared with Cu
 ### Citation
 
 Please, cite [Ramos et al.](https://arxiv.org/abs/2304.05341):
+
 ```
 @misc{ramos2023bayesian,
-      title={Bayesian Optimization of Catalysts With In-context Learning}, 
+      title={Bayesian Optimization of Catalysts With In-context Learning},
       author={Mayk Caldas Ramos and Shane S. Michtavy and Marc D. Porosoff and Andrew D. White},
       year={2023},
       eprint={2304.05341},
