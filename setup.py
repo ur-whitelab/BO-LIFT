@@ -11,7 +11,7 @@ setup(
     description="BayesOPT with In-Context Learning",
     author="Andrew White",
     author_email="andrew.white@rochester.edu",
-    url="https://github.com/whitead/boicl",
+    url="https://github.com/ur-whitelab/BO-ICL",
     license="MIT",
     packages=["boicl"],
     install_requires=[

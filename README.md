@@ -121,7 +121,6 @@ asktell = boicl.AskTellFewShotTopk(
 Other arguments can be used to customize the prompt (`prefix`, `prompt_template`, `suffix`) and the in-context learning procedure (`use_quantiles`, `n_quantiles`).
 Additionally, we implemented other models. A brief list can be seen below:
 
-- AskTellFewShotMulti;
 - AskTellFewShotTopk;
 - AskTellFinetuning;
 - AskTellRidgeKernelRegression;
