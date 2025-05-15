@@ -1,5 +1,5 @@
-import bolift
-from bolift import (
+import boicl
+from boicl import (
     AskTellFewShotTopk,
     AskTellGPR,
     AskTellNearestNeighbor,
