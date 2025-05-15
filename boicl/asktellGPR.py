@@ -333,7 +333,7 @@ class AskTellGPR(AskTellFewShot):
                     f"We use an isomap considering 5 neighbors. Therefore, more than 6 points are needed to train the model.\n"
                     f"Use train=False to tell N-1 points to the model first.\n"
                     f"Then use train=True to tell the last point to train the model.\n"
-                    f"Alternatively, use `pool` to pass a bolift.Pool to train the isomap during AskTellGPR construction.\n"
+                    f"Alternatively, use `pool` to pass a boicl.Pool to train the isomap during AskTellGPR construction.\n"
                     f'{85*"-"}'
                 )
                 raise ValueError(msg)
