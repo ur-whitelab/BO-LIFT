@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from pydantic import BaseModel
 
 
-class BOLiftTool(BaseTool):
+class BOICLTool(BaseTool):
     name: str = "Experiment Designer"
     description: str = (
         "Propose or predict experiments using stateful ask-and-tell Bayes Optimizer. "
@@ -26,7 +26,7 @@ class BOLiftTool(BaseTool):
         asktell: Optional[AskTellFewShotTopk] = None,
     ):
         # call the parent class constructor
-        super(BOLiftTool, self).__init__()
+        super(BOICLTool, self).__init__()
 
         if asktell is None:
             asktell = AskTellFewShotTopk()
